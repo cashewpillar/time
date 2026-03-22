@@ -632,6 +632,7 @@
           id: "workspace-1",
           name: "Workspace 1",
           activeProjectId: "workspace-1-project-1",
+          visibleProjectIds: ["workspace-1-project-1", "workspace-1-project-2"],
           projects: [
             { id: "workspace-1-project-1", name: "Project 1", tasks: [] },
             { id: "workspace-1-project-2", name: "Project 2", tasks: [] }
@@ -641,6 +642,7 @@
           id: "workspace-2",
           name: "Workspace 2",
           activeProjectId: "workspace-2-project-2",
+          visibleProjectIds: ["workspace-2-project-1", "workspace-2-project-2"],
           projects: [
             { id: "workspace-2-project-1", name: "Project 1", tasks: [] },
             { id: "workspace-2-project-2", name: "Project 2", tasks: [] },
@@ -686,6 +688,7 @@
             id: workspace.id || `workspace-${workspaceIndex + 1}`,
             name: typeof workspace.name === "string" && workspace.name.trim() ? workspace.name : `Workspace ${workspaceIndex + 1}`,
             activeProjectId: typeof workspace.activeProjectId === "string" ? workspace.activeProjectId : null,
+            visibleProjectIds: Array.isArray(workspace.visibleProjectIds) ? workspace.visibleProjectIds : [],
             projects: Array.isArray(workspace.projects) && workspace.projects.length
               ? workspace.projects.map((project, projectIndex) => ({
                   id: project.id || `project-${workspaceIndex + 1}-${projectIndex + 1}`,
@@ -747,6 +750,7 @@
           id: "workspace-1",
           name: "Workspace 1",
           activeProjectId: "workspace-1-project-1",
+          visibleProjectIds: ["workspace-1-project-1"],
           projects: [{ id: "workspace-1-project-1", name: "Project 1", tasks: [] }]
         }];
       }
@@ -762,6 +766,7 @@
         if (!workspace.projects.find((project) => project.id === workspace.activeProjectId)) {
           workspace.activeProjectId = workspace.projects[0].id;
         }
+        ensureVisibleProjectIds(workspace);
       });
     }
 
@@ -776,6 +781,63 @@
     function getActiveProject() {
       const workspace = getActiveWorkspace();
       return workspace?.projects.find((project) => project.id === workspace.activeProjectId) || null;
+    }
+
+    function ensureVisibleProjectIds(workspace) {
+      if (!workspace) return;
+
+      const validIds = workspace.projects.map((project) => project.id);
+      const requiredCount = Math.min(2, validIds.length);
+      const visible = (Array.isArray(workspace.visibleProjectIds) ? workspace.visibleProjectIds : [])
+        .filter((id) => validIds.includes(id))
+        .slice(0, 2);
+
+      if (workspace.activeProjectId && validIds.includes(workspace.activeProjectId) && !visible.includes(workspace.activeProjectId)) {
+        if (visible.length < requiredCount) {
+          visible.push(workspace.activeProjectId);
+        } else {
+          const replacementIndex = visible.findIndex((id) => id !== workspace.activeProjectId);
+          visible[replacementIndex >= 0 ? replacementIndex : 0] = workspace.activeProjectId;
+        }
+      }
+
+      for (const projectId of validIds) {
+        if (visible.length >= requiredCount) break;
+        if (!visible.includes(projectId)) {
+          visible.push(projectId);
+        }
+      }
+
+      workspace.visibleProjectIds = visible.slice(0, requiredCount);
+    }
+
+    function setActiveProject(workspace, projectId) {
+      if (!workspace || !projectId) return;
+
+      const previousActiveId = workspace.activeProjectId;
+      workspace.activeProjectId = projectId;
+
+      const visible = (Array.isArray(workspace.visibleProjectIds) ? workspace.visibleProjectIds : [])
+        .filter((id) => workspace.projects.some((project) => project.id === id))
+        .slice(0, 2);
+
+      if (visible.includes(projectId)) {
+        workspace.visibleProjectIds = visible;
+        ensureVisibleProjectIds(workspace);
+        return;
+      }
+
+      if (visible.length < Math.min(2, workspace.projects.length)) {
+        visible.push(projectId);
+        workspace.visibleProjectIds = visible;
+        ensureVisibleProjectIds(workspace);
+        return;
+      }
+
+      const replacementIndex = visible.findIndex((id) => id !== previousActiveId);
+      visible[replacementIndex >= 0 ? replacementIndex : 0] = projectId;
+      workspace.visibleProjectIds = visible;
+      ensureVisibleProjectIds(workspace);
     }
 
     function formatTime(totalSeconds) {
@@ -865,7 +927,9 @@
 
       if (!workspace) return;
 
-      const visibleProjects = workspace.projects.slice(0, 2);
+      const visibleProjects = workspace.visibleProjectIds
+        .map((projectId) => workspace.projects.find((project) => project.id === projectId))
+        .filter(Boolean);
       visibleProjects.forEach((project) => {
         const button = document.createElement("button");
         button.className = `project-tab${project.id === workspace.activeProjectId ? " active" : ""}`;
@@ -877,7 +941,7 @@
           event.stopPropagation();
           const activeWorkspace = getActiveWorkspace();
           if (!activeWorkspace) return;
-          activeWorkspace.activeProjectId = project.id;
+          setActiveProject(activeWorkspace, project.id);
           state.isProjectMenuOpen = false;
           setStatus("Project selected.");
           persistAndRender();
@@ -1081,6 +1145,7 @@
         id: newWorkspaceId,
         name: `Workspace ${nextNumber}`,
         activeProjectId: firstProjectId,
+        visibleProjectIds: [firstProjectId],
         projects: [{ id: firstProjectId, name: "Project 1", tasks: [] }]
       });
 
@@ -1119,7 +1184,7 @@
       const newProject = { id: projectId, name: `Project ${nextNumber}`, tasks: [] };
 
       workspace.projects.push(newProject);
-      workspace.activeProjectId = projectId;
+      setActiveProject(workspace, projectId);
       state.isProjectMenuOpen = false;
       setStatus(`${newProject.name} created.`);
       persistAndRender();
@@ -1136,9 +1201,10 @@
 
       const project = workspace.projects.find((entry) => entry.id === projectId);
       workspace.projects = workspace.projects.filter((entry) => entry.id !== projectId);
+      workspace.visibleProjectIds = workspace.visibleProjectIds.filter((id) => id !== projectId);
 
       if (workspace.activeProjectId === projectId) {
-        workspace.activeProjectId = workspace.projects[0].id;
+        setActiveProject(workspace, workspace.projects[0].id);
       }
 
       state.isProjectMenuOpen = false;
@@ -1198,7 +1264,7 @@
       if (button.dataset.action === "select-project") {
         const workspace = getActiveWorkspace();
         if (!workspace) return;
-        workspace.activeProjectId = button.dataset.projectId;
+        setActiveProject(workspace, button.dataset.projectId);
         state.isProjectMenuOpen = false;
         setStatus("Project selected.");
         persistAndRender();
@@ -1213,7 +1279,7 @@
       if (button.dataset.action === "select-project") {
         const workspace = getActiveWorkspace();
         if (!workspace) return;
-        workspace.activeProjectId = button.dataset.projectId;
+        setActiveProject(workspace, button.dataset.projectId);
         state.isProjectMenuOpen = false;
         setStatus("Project selected.");
         persistAndRender();
