@@ -367,7 +367,7 @@
 
     .task-item {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 12px;
       padding: 14px;
       border-radius: var(--radius-lg);
@@ -378,6 +378,7 @@
     .task-toggle {
       width: 26px;
       height: 26px;
+      margin-top: 4px;
       border-radius: 999px;
       border: 2px solid rgba(255, 255, 255, 0.84);
       background: transparent;
@@ -414,6 +415,24 @@
     }
 
     .delete-btn {
+      width: 34px;
+      height: 34px;
+      margin-top: 4px;
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.12);
+      color: var(--white);
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+
+    .task-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .icon-action-btn {
       width: 34px;
       height: 34px;
       border-radius: 10px;
@@ -468,6 +487,77 @@
 
     .task-input::placeholder {
       color: rgba(255, 247, 247, 0.65);
+    }
+
+    .task-notes {
+      min-height: 96px;
+      resize: vertical;
+    }
+
+    .task-type-select {
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, rgba(255, 255, 255, 0.85) 50%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.85) 50%, transparent 50%);
+      background-position:
+        calc(100% - 20px) calc(50% - 2px),
+        calc(100% - 14px) calc(50% - 2px);
+      background-size: 6px 6px, 6px 6px;
+      background-repeat: no-repeat;
+      padding-right: 34px;
+    }
+
+    .task-type-custom {
+      display: none;
+    }
+
+    .task-type-custom.open {
+      display: flex;
+    }
+
+    .task-checkbox-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .task-checkbox {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--white);
+    }
+
+    .task-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .task-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--white);
+      font-size: 0.76rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .task-notes-copy {
+      margin-top: 8px;
+      color: var(--text-soft);
+      font-size: 0.9rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
 
     .task-input:focus-visible,
@@ -602,6 +692,21 @@
           <div class="task-input-row">
             <input class="task-input" id="taskInput" type="text" maxlength="100" placeholder="What are you working on?" aria-label="Task name">
           </div>
+          <div class="task-input-row">
+            <select class="task-input task-type-select" id="taskTypeInput" aria-label="Task type"></select>
+          </div>
+          <div class="task-input-row task-type-custom" id="taskTypeCustomRow">
+            <input class="task-input" id="taskTypeCustomInput" type="text" maxlength="40" placeholder="Add a task type" aria-label="Add a task type">
+          </div>
+          <div class="task-input-row">
+            <textarea class="task-input task-notes" id="taskNotesInput" maxlength="400" placeholder="Task notes" aria-label="Task notes"></textarea>
+          </div>
+          <div class="task-input-row">
+            <label class="task-checkbox-row" for="taskAgentEligibleInput">
+              <input class="task-checkbox" id="taskAgentEligibleInput" type="checkbox">
+              <span>Can be handled by an AI agent</span>
+            </label>
+          </div>
           <div class="task-form-actions">
             <button class="task-form-btn primary" type="submit">Save Task</button>
             <button class="task-form-btn ghost" type="button" id="cancelTaskBtn">Cancel</button>
@@ -616,6 +721,7 @@
   <script>
     const STORAGE_KEY = "workspace-two-state-v2";
     const DEFAULT_TARGET_SECONDS = 20 * 60;
+    const DEFAULT_TASK_TYPES = ["development", "design", "product"];
 
     const state = {
       activeWorkspaceId: "workspace-2",
@@ -625,8 +731,10 @@
       completedSessions: 0,
       lastTickAt: null,
       isTaskFormOpen: false,
+      editingTaskId: null,
       isWorkspaceMenuOpen: false,
       isProjectMenuOpen: false,
+      customTaskTypes: [],
       workspaces: [
         {
           id: "workspace-1",
@@ -674,6 +782,11 @@
     const showTaskFormBtn = document.getElementById("showTaskFormBtn");
     const taskForm = document.getElementById("taskForm");
     const taskInput = document.getElementById("taskInput");
+    const taskTypeInput = document.getElementById("taskTypeInput");
+    const taskTypeCustomRow = document.getElementById("taskTypeCustomRow");
+    const taskTypeCustomInput = document.getElementById("taskTypeCustomInput");
+    const taskNotesInput = document.getElementById("taskNotesInput");
+    const taskAgentEligibleInput = document.getElementById("taskAgentEligibleInput");
     const cancelTaskBtn = document.getElementById("cancelTaskBtn");
     const clearCompletedBtn = document.getElementById("clearCompletedBtn");
     const statusText = document.getElementById("statusText");
@@ -699,6 +812,9 @@
                         .map((task, taskIndex) => ({
                           id: task.id || `task-${workspaceIndex}-${projectIndex}-${taskIndex}-${Date.now()}`,
                           text: task.text,
+                          type: typeof task.type === "string" ? task.type : "",
+                          notes: typeof task.notes === "string" ? task.notes : "",
+                          agentEligible: Boolean(task.agentEligible),
                           done: Boolean(task.done)
                         }))
                     : []
@@ -724,6 +840,11 @@
         }
         if (typeof saved.lastTickAt === "number") {
           state.lastTickAt = saved.lastTickAt;
+        }
+        if (Array.isArray(saved.customTaskTypes)) {
+          state.customTaskTypes = saved.customTaskTypes
+            .filter((type) => typeof type === "string" && type.trim())
+            .map((type) => type.trim().toLowerCase());
         }
 
         normalizeWorkspaceState();
@@ -871,6 +992,65 @@
 
     function setStatus(message) {
       statusText.textContent = message;
+    }
+
+    function getTaskTypeOptions() {
+      return Array.from(new Set([...DEFAULT_TASK_TYPES, ...state.customTaskTypes]));
+    }
+
+    function renderTaskTypeOptions(selectedType = "") {
+      const normalizedSelected = selectedType.trim().toLowerCase();
+      const options = getTaskTypeOptions();
+      taskTypeInput.innerHTML = "";
+
+      const placeholderOption = document.createElement("option");
+      placeholderOption.value = "";
+      placeholderOption.textContent = "Select task type";
+      taskTypeInput.appendChild(placeholderOption);
+
+      options.forEach((type) => {
+        const option = document.createElement("option");
+        option.value = type;
+        option.textContent = type[0].toUpperCase() + type.slice(1);
+        taskTypeInput.appendChild(option);
+      });
+
+      const customOption = document.createElement("option");
+      customOption.value = "__custom__";
+      customOption.textContent = "Add more...";
+      taskTypeInput.appendChild(customOption);
+
+      if (normalizedSelected && options.includes(normalizedSelected)) {
+        taskTypeInput.value = normalizedSelected;
+      } else if (normalizedSelected) {
+        taskTypeInput.value = "__custom__";
+        taskTypeCustomInput.value = selectedType;
+      } else {
+        taskTypeInput.value = "";
+      }
+
+      syncTaskTypeCustomVisibility();
+    }
+
+    function syncTaskTypeCustomVisibility() {
+      const isCustom = taskTypeInput.value === "__custom__";
+      taskTypeCustomRow.classList.toggle("open", isCustom);
+      if (!isCustom) {
+        taskTypeCustomInput.value = "";
+      }
+    }
+
+    function resetTaskFormFields() {
+      taskInput.value = "";
+      taskNotesInput.value = "";
+      taskAgentEligibleInput.checked = false;
+      state.editingTaskId = null;
+      renderTaskTypeOptions("");
+    }
+
+    function getEditingTask() {
+      const project = getActiveProject();
+      return project?.tasks.find((task) => task.id === state.editingTaskId) || null;
     }
 
     function syncMenuVisibility() {
@@ -1037,13 +1217,25 @@
       project.tasks.forEach((task, index) => {
         const item = document.createElement("div");
         item.className = `task-item${task.done ? " done" : ""}`;
+        const badges = [];
+        if (task.type) {
+          badges.push(`<span class="task-badge">${escapeHtml(task.type)}</span>`);
+        }
+        if (task.agentEligible) {
+          badges.push('<span class="task-badge">AI Agent OK</span>');
+        }
         item.innerHTML = `
           <button class="task-toggle" type="button" data-action="toggle-task" data-task-id="${task.id}" aria-label="Toggle task">${task.done ? "✓" : ""}</button>
           <div class="task-copy">
             <div class="task-name">${escapeHtml(task.text)}</div>
             <div class="task-meta">Task ${index + 1}</div>
+            ${badges.length ? `<div class="task-badges">${badges.join("")}</div>` : ""}
+            ${task.notes ? `<div class="task-notes-copy">${escapeHtml(task.notes)}</div>` : ""}
           </div>
-          <button class="delete-btn" type="button" data-action="delete-task" data-task-id="${task.id}" aria-label="Delete task">✕</button>
+          <div class="task-actions">
+            <button class="icon-action-btn" type="button" data-action="edit-task" data-task-id="${task.id}" aria-label="Edit task">✎</button>
+            <button class="delete-btn" type="button" data-action="delete-task" data-task-id="${task.id}" aria-label="Delete task">✕</button>
+          </div>
         `;
         tasksList.appendChild(item);
       });
@@ -1052,10 +1244,20 @@
     function renderTaskComposer() {
       taskForm.classList.toggle("open", state.isTaskFormOpen);
       showTaskFormBtn.style.display = state.isTaskFormOpen ? "none" : "grid";
+      const primaryTaskButton = taskForm.querySelector(".task-form-btn.primary");
       if (state.isTaskFormOpen) {
+        const editingTask = getEditingTask();
+        primaryTaskButton.textContent = editingTask ? "Save Changes" : "Save Task";
+        if (editingTask) {
+          taskInput.value = editingTask.text;
+          taskNotesInput.value = editingTask.notes || "";
+          taskAgentEligibleInput.checked = Boolean(editingTask.agentEligible);
+          renderTaskTypeOptions(editingTask.type || "");
+        }
         window.setTimeout(() => taskInput.focus(), 0);
       } else {
-        taskInput.value = "";
+        primaryTaskButton.textContent = "Save Task";
+        resetTaskFormFields();
       }
     }
 
@@ -1266,11 +1468,21 @@
 
     function openTaskForm() {
       state.isTaskFormOpen = true;
+      state.editingTaskId = null;
+      resetTaskFormFields();
       persistAndRender();
     }
 
     function closeTaskForm() {
       state.isTaskFormOpen = false;
+      state.editingTaskId = null;
+      persistAndRender();
+    }
+
+    function editTask(taskId) {
+      state.editingTaskId = taskId;
+      state.isTaskFormOpen = true;
+      setStatus("Editing task.");
       persistAndRender();
     }
 
@@ -1352,6 +1564,13 @@
 
     createProjectBtn.addEventListener("click", createProject);
 
+    taskTypeInput.addEventListener("change", () => {
+      syncTaskTypeCustomVisibility();
+      if (taskTypeInput.value === "__custom__") {
+        window.setTimeout(() => taskTypeCustomInput.focus(), 0);
+      }
+    });
+
     timerTargetInput.addEventListener("change", () => {
       const parsed = parseTimeInput(timerTargetInput.value);
       if (!parsed || parsed <= 0) {
@@ -1383,21 +1602,49 @@
     taskForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const text = taskInput.value.trim();
+      const selectedType = taskTypeInput.value.trim();
+      const customType = taskTypeCustomInput.value.trim().toLowerCase();
+      const type = selectedType === "__custom__" ? customType : selectedType;
+      const notes = taskNotesInput.value.trim();
+      const agentEligible = taskAgentEligibleInput.checked;
       const project = getActiveProject();
+      const editingTask = getEditingTask();
 
       if (!text || !project) {
         setStatus("Add a task name first.");
         return;
       }
 
-      project.tasks.push({
-        id: `task-${Date.now()}`,
-        text,
-        done: false
-      });
+      if (selectedType === "__custom__" && !customType) {
+        setStatus("Add a custom task type first.");
+        return;
+      }
+
+      if (customType && !state.customTaskTypes.includes(customType)) {
+        state.customTaskTypes.push(customType);
+        state.customTaskTypes.sort();
+      }
+
+      if (editingTask) {
+        editingTask.text = text;
+        editingTask.type = type;
+        editingTask.notes = notes;
+        editingTask.agentEligible = agentEligible;
+        setStatus("Task updated.");
+      } else {
+        project.tasks.push({
+          id: `task-${Date.now()}`,
+          text,
+          type,
+          notes,
+          agentEligible,
+          done: false
+        });
+        setStatus("Task added.");
+      }
 
       state.isTaskFormOpen = false;
-      setStatus("Task added.");
+      state.editingTaskId = null;
       persistAndRender();
     });
 
@@ -1419,6 +1666,11 @@
       if (button.dataset.action === "delete-task") {
         project.tasks = project.tasks.filter((entry) => entry.id !== button.dataset.taskId);
         setStatus("Task deleted.");
+      }
+
+      if (button.dataset.action === "edit-task") {
+        editTask(button.dataset.taskId);
+        return;
       }
 
       persistAndRender();
