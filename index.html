@@ -792,19 +792,18 @@
         .filter((id) => validIds.includes(id))
         .slice(0, 2);
 
-      if (workspace.activeProjectId && validIds.includes(workspace.activeProjectId) && !visible.includes(workspace.activeProjectId)) {
-        if (visible.length < requiredCount) {
-          visible.push(workspace.activeProjectId);
-        } else {
-          const replacementIndex = visible.findIndex((id) => id !== workspace.activeProjectId);
-          visible[replacementIndex >= 0 ? replacementIndex : 0] = workspace.activeProjectId;
-        }
-      }
-
       for (const projectId of validIds) {
         if (visible.length >= requiredCount) break;
         if (!visible.includes(projectId)) {
           visible.push(projectId);
+        }
+      }
+
+      if (workspace.activeProjectId && validIds.includes(workspace.activeProjectId) && !visible.includes(workspace.activeProjectId)) {
+        if (requiredCount <= 1 || visible.length <= 1) {
+          visible[0] = workspace.activeProjectId;
+        } else {
+          visible[1] = workspace.activeProjectId;
         }
       }
 
@@ -904,6 +903,14 @@
           selectButton.classList.add("active");
         }
 
+        const renameButton = document.createElement("button");
+        renameButton.className = "dropdown-icon";
+        renameButton.type = "button";
+        renameButton.dataset.action = "rename-workspace";
+        renameButton.dataset.workspaceId = workspace.id;
+        renameButton.setAttribute("aria-label", `Rename ${workspace.name}`);
+        renameButton.textContent = "✎";
+
         const deleteButton = document.createElement("button");
         deleteButton.className = "dropdown-icon";
         deleteButton.type = "button";
@@ -916,7 +923,7 @@
         const wrapper = document.createElement("div");
         wrapper.style.display = "flex";
         wrapper.style.gap = "6px";
-        wrapper.append(selectButton, deleteButton);
+        wrapper.append(selectButton, renameButton, deleteButton);
         workspaceList.appendChild(wrapper);
       });
     }
@@ -978,6 +985,14 @@
         selectButton.dataset.projectId = project.id;
         selectButton.innerHTML = `<span class="dropdown-item-name">${escapeHtml(project.name)}</span>`;
 
+        const renameButton = document.createElement("button");
+        renameButton.className = "dropdown-icon";
+        renameButton.type = "button";
+        renameButton.dataset.action = "rename-project";
+        renameButton.dataset.projectId = project.id;
+        renameButton.setAttribute("aria-label", `Rename ${project.name}`);
+        renameButton.textContent = "✎";
+
         const deleteButton = document.createElement("button");
         deleteButton.className = "dropdown-icon";
         deleteButton.type = "button";
@@ -986,7 +1001,7 @@
         deleteButton.setAttribute("aria-label", `Delete ${project.name}`);
         deleteButton.textContent = "✕";
 
-        wrapper.append(selectButton, deleteButton);
+        wrapper.append(selectButton, renameButton, deleteButton);
         projectList.appendChild(wrapper);
       });
     }
@@ -1156,6 +1171,24 @@
       persistAndRender();
     }
 
+    function renameWorkspace(workspaceId) {
+      const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
+      if (!workspace) return;
+
+      const nextName = window.prompt("Rename workspace", workspace.name);
+      if (nextName === null) return;
+
+      const trimmed = nextName.trim();
+      if (!trimmed) {
+        setStatus("Workspace name cannot be empty.");
+        return;
+      }
+
+      workspace.name = trimmed;
+      setStatus("Workspace renamed.");
+      persistAndRender();
+    }
+
     function deleteWorkspace(workspaceId) {
       if (state.workspaces.length === 1) {
         setStatus("You need at least one workspace.");
@@ -1187,6 +1220,25 @@
       setActiveProject(workspace, projectId);
       state.isProjectMenuOpen = false;
       setStatus(`${newProject.name} created.`);
+      persistAndRender();
+    }
+
+    function renameProject(projectId) {
+      const workspace = getActiveWorkspace();
+      const project = workspace?.projects.find((entry) => entry.id === projectId);
+      if (!project) return;
+
+      const nextName = window.prompt("Rename project", project.name);
+      if (nextName === null) return;
+
+      const trimmed = nextName.trim();
+      if (!trimmed) {
+        setStatus("Project name cannot be empty.");
+        return;
+      }
+
+      project.name = trimmed;
+      setStatus("Project renamed.");
       persistAndRender();
     }
 
@@ -1245,6 +1297,10 @@
       if (button.dataset.action === "delete-workspace") {
         deleteWorkspace(button.dataset.workspaceId);
       }
+
+      if (button.dataset.action === "rename-workspace") {
+        renameWorkspace(button.dataset.workspaceId);
+      }
     });
 
     createWorkspaceBtn.addEventListener("click", createWorkspace);
@@ -1287,6 +1343,10 @@
 
       if (button.dataset.action === "delete-project") {
         deleteProject(button.dataset.projectId);
+      }
+
+      if (button.dataset.action === "rename-project") {
+        renameProject(button.dataset.projectId);
       }
     });
 
