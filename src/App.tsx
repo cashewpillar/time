@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { playChime } from "./lib/audio";
-import { fetchNotionSelectOptions, type NotionSelectOptions } from "./lib/notion";
+import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { formatTime, parseTimeInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
 import { SessionSummary } from "./components/SessionSummary";
@@ -11,6 +11,7 @@ import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { usePersistentAppState } from "./hooks/usePersistentAppState";
 import {
   getActiveProject,
+  getSelectedTask,
   getActiveWorkspace,
   getEditingTask,
   getTaskTypeOptions,
@@ -29,12 +30,12 @@ function App() {
   const [notionOptionsError, setNotionOptionsError] = useState("");
   const [notionOptions, setNotionOptions] = useState<NotionSelectOptions>({
     taskTypes: [],
-    tasks: [],
-    epics: []
+    workspaces: []
   });
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
+  const selectedTask = useMemo(() => getSelectedTask(state), [state]);
   const editingTask = useMemo(() => getEditingTask(state), [state]);
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace), [activeWorkspace]);
   const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
@@ -63,9 +64,32 @@ function App() {
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
       playChime();
+
+      if (selectedTask && notionConfig.databaseId.trim() && notionConfig.ownerToken.trim()) {
+        const completedAt = Date.now();
+        void logTaskEntry({
+          entry: selectedTask.text.trim(),
+          taskType: selectedTask.type.trim(),
+          task: activeProject?.name || "Project",
+          epic: activeWorkspace?.name || "Workspace",
+          minutes: Math.max(1, Math.round(state.targetSeconds / 60)),
+          startDatetime: new Date(completedAt).toISOString(),
+          notes: selectedTask.notes.trim(),
+          aiWorkflow: selectedTask.agentEligible
+        });
+      }
     }
     previousCompletedSessionsRef.current = state.completedSessions;
-  }, [state.completedSessions]);
+  }, [
+    activeProject?.name,
+    activeWorkspace?.name,
+    logTaskEntry,
+    notionConfig.databaseId,
+    notionConfig.ownerToken,
+    selectedTask,
+    state.completedSessions,
+    state.targetSeconds
+  ]);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -167,17 +191,6 @@ function App() {
       customType,
       now
     });
-
-    void logTaskEntry({
-      entry: draft.text.trim(),
-      taskType: draft.type.trim() || "Uncategorized",
-      task: activeProject.name,
-      epic: activeWorkspace?.name || "Workspace",
-      minutes: Math.max(1, Math.round(state.targetSeconds / 60)),
-      startDatetime: new Date(now).toISOString(),
-      notes: draft.notes.trim(),
-      aiWorkflow: draft.agentEligible
-    });
   }
 
   function handleSaveNotionConfig() {
@@ -192,13 +205,13 @@ function App() {
     const trimmedOwnerToken = ownerTokenDraft.trim();
     if (!trimmedDatabaseId) {
       setNotionOptionsError("Add a database ID first.");
-      setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
+      setNotionOptions({ taskTypes: [], workspaces: [] });
       return;
     }
 
     if (!trimmedOwnerToken) {
       setNotionOptionsError("Add your owner token first.");
-      setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
+      setNotionOptions({ taskTypes: [], workspaces: [] });
       return;
     }
 
@@ -214,11 +227,10 @@ function App() {
       dispatch({
         type: "import-notion-options",
         taskTypes: options.taskTypes,
-        tasks: options.tasks,
-        epics: options.epics
+        workspaces: options.workspaces
       });
     } catch (error) {
-      setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
+      setNotionOptions({ taskTypes: [], workspaces: [] });
       setNotionOptionsError(error instanceof Error ? error.message : "Failed to load select options.");
     } finally {
       setIsLoadingNotionOptions(false);
@@ -279,12 +291,12 @@ function App() {
             </button>
 
             <button className="notion-save notion-secondary" type="button" onClick={handleFetchNotionOptions} disabled={isLoadingNotionOptions}>
-              {isLoadingNotionOptions ? "Loading options..." : "Fetch select values"}
+              {isLoadingNotionOptions ? "Importing..." : `Import recent entries (${RECENT_IMPORT_DAYS}d)`}
             </button>
 
             {notionOptionsError ? <div className="notion-helper error">{notionOptionsError}</div> : null}
 
-            {notionOptions.taskTypes.length || notionOptions.tasks.length || notionOptions.epics.length ? (
+            {notionOptions.taskTypes.length || notionOptions.workspaces.length ? (
               <div className="notion-options">
                 <div className="notion-options-group">
                   <div className="notion-options-label">Task type</div>
@@ -295,23 +307,16 @@ function App() {
                   </div>
                 </div>
 
-                <div className="notion-options-group">
-                  <div className="notion-options-label">Task</div>
-                  <div className="notion-chip-list">
-                    {notionOptions.tasks.length ? notionOptions.tasks.map((value) => (
-                      <span key={value} className="notion-chip">{value}</span>
-                    )) : <span className="notion-helper">No task values found.</span>}
+                {notionOptions.workspaces.map((workspace) => (
+                  <div key={workspace.name} className="notion-options-group">
+                    <div className="notion-options-label">{workspace.name}</div>
+                    <div className="notion-chip-list">
+                      {workspace.projects.length ? workspace.projects.map((value) => (
+                        <span key={`${workspace.name}-${value}`} className="notion-chip">{value}</span>
+                      )) : <span className="notion-helper">No projects found for this workspace.</span>}
+                    </div>
                   </div>
-                </div>
-
-                <div className="notion-options-group">
-                  <div className="notion-options-label">Epic</div>
-                  <div className="notion-chip-list">
-                    {notionOptions.epics.length ? notionOptions.epics.map((value) => (
-                      <span key={value} className="notion-chip">{value}</span>
-                    )) : <span className="notion-helper">No epic values found.</span>}
-                  </div>
-                </div>
+                ))}
               </div>
             ) : null}
           </div>
@@ -350,7 +355,9 @@ function App() {
           <TaskList
             project={activeProject}
             editingTask={editingTask}
+            activeTaskId={state.activeTaskId}
             taskTypeOptions={taskTypeOptions}
+            onSelectTask={(taskId) => dispatch({ type: "select-task", taskId })}
             onEditTask={(taskId) => dispatch({ type: "edit-task", taskId })}
             onToggleTask={(taskId) => dispatch({ type: "toggle-task", taskId })}
             onDeleteTask={(taskId) => dispatch({ type: "delete-task", taskId })}

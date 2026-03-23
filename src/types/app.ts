@@ -28,6 +28,7 @@ export type AppState = {
   isRunning: boolean;
   completedSessions: number;
   lastTickAt: number | null;
+  activeTaskId: string | null;
   isTaskFormOpen: boolean;
   editingTaskId: string | null;
   isWorkspaceMenuOpen: boolean;

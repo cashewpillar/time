@@ -17,8 +17,10 @@ export type NotionTaskEntry = {
 
 export type NotionSelectOptions = {
   taskTypes: string[];
-  tasks: string[];
-  epics: string[];
+  workspaces: Array<{
+    name: string;
+    projects: string[];
+  }>;
 };
 
 function hasValidConfig(config: NotionConfig): boolean {
@@ -41,6 +43,8 @@ function richText(value: string) {
     text: { content }
   }));
 }
+
+export const RECENT_IMPORT_DAYS = 90;
 
 
 async function notionFetch<T>(config: NotionConfig, path: string, init: RequestInit): Promise<T> {
@@ -118,13 +122,14 @@ export function getNotionConnectionStatus(config: NotionConfig): NotionSyncStatu
 
 export async function fetchNotionSelectOptions(config: NotionConfig): Promise<NotionSelectOptions> {
   if (!hasValidConfig(config)) {
-    return { taskTypes: [], tasks: [], epics: [] };
+    return { taskTypes: [], workspaces: [] };
   }
 
-  return notionFetch(config, "/schema", {
+  return notionFetch(config, "/recent", {
     method: "POST",
     body: JSON.stringify({
-      databaseId: config.databaseId
+      databaseId: config.databaseId,
+      days: RECENT_IMPORT_DAYS
     })
   });
 }
@@ -132,36 +137,44 @@ export async function fetchNotionSelectOptions(config: NotionConfig): Promise<No
 export async function saveTaskEntryToNotion(config: NotionConfig, taskEntry: NotionTaskEntry): Promise<void> {
   if (!hasValidConfig(config)) return;
 
+  const properties: Record<string, unknown> = {
+    Entry: {
+      title: [{ text: { content: taskEntry.entry } }]
+    },
+    Task: {
+      select: { name: taskEntry.task }
+    },
+    Epic: {
+      select: { name: taskEntry.epic }
+    },
+    Minutes: {
+      number: taskEntry.minutes
+    },
+    "Start datetime": {
+      date: { start: taskEntry.startDatetime }
+    },
+    "AI workflow": {
+      checkbox: taskEntry.aiWorkflow
+    }
+  };
+
+  if (taskEntry.taskType.trim()) {
+    properties["Task type"] = {
+      multi_select: [{ name: taskEntry.taskType }]
+    };
+  }
+
+  if (taskEntry.notes.trim()) {
+    properties.Notes = {
+      rich_text: richText(taskEntry.notes)
+    };
+  }
+
   await notionFetch(config, "/", {
     method: "POST",
     body: JSON.stringify({
       databaseId: config.databaseId,
-      properties: {
-        Entry: {
-          title: [{ text: { content: taskEntry.entry } }]
-        },
-        "Task type": {
-          select: { name: taskEntry.taskType }
-        },
-        Task: {
-          select: { name: taskEntry.task }
-        },
-        Epic: {
-          select: { name: taskEntry.epic }
-        },
-        Minutes: {
-          number: taskEntry.minutes
-        },
-        "Start datetime": {
-          date: { start: taskEntry.startDatetime }
-        },
-        Notes: {
-          rich_text: richText(taskEntry.notes)
-        },
-        "AI workflow": {
-          checkbox: taskEntry.aiWorkflow
-        }
-      }
+      properties
     })
   });
 }

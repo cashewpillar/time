@@ -19,7 +19,7 @@ npm run build
 
 ## Notion logging
 
-This app can create rows in a Notion database when you save a task, and it can also fetch the existing select values already configured in that database.
+This app can create rows in a Notion database when a timer session completes, and it can also import recent Notion entries to rebuild workspace and project structure.
 
 The frontend only stores:
 
@@ -34,7 +34,7 @@ The frontend does not store or send a Notion API key anymore. The Worker is resp
 The current app expects these properties in your Notion database:
 
 - `Entry` as `Title`
-- `Task type` as `Select`
+- `Task type` as `Multi-select`
 - `Task` as `Select`
 - `Epic` as `Select`
 - `Minutes` as `Number`
@@ -124,22 +124,22 @@ After deploy, copy the Worker URL and place it in your local `.env` as `VITE_NOT
 ### Request flow
 
 1. The app saves a task or requests schema data.
-2. The browser sends either task data or a schema request plus `databaseId` and your owner token to the Worker.
+2. The browser sends either task data or a recent-entry import request plus `databaseId` and your owner token to the Worker.
 3. The Worker checks that token against `APP_WRITE_TOKEN`.
 4. If it matches, the Worker adds the `Authorization` header with `NOTION_API_KEY`.
-5. The Worker either creates a page in the target Notion database or fetches the database schema.
+5. The Worker either creates a page in the target Notion database or queries recent entries and groups them by `Epic -> Task`.
 
-### Fetching select values
+### Importing recent entries
 
-The Notion config panel includes a `Fetch select values` button.
+The Notion config panel includes an `Import recent entries (90d)` button.
 
-It reads the current options from:
+It queries recent rows from Notion and derives:
 
-- `Task type`
-- `Task`
-- `Epic`
+- workspaces from `Epic`
+- projects from `Task` within each `Epic`
+- task type options from recent `Task type` values
 
-This is useful for checking what values already exist in your database before you start logging work from the app.
+This keeps the app focused on current work without querying the entire historical database every time.
 
 ### Troubleshooting
 

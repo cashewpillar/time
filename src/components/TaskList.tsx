@@ -4,7 +4,9 @@ import type { Project, Task, TaskDraft } from "../types/app";
 type TaskListProps = {
   project: Project | null;
   editingTask: Task | null;
+  activeTaskId: string | null;
   taskTypeOptions: string[];
+  onSelectTask: (taskId: string) => void;
   onEditTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
@@ -16,7 +18,9 @@ type TaskListProps = {
 export function TaskList({
   project,
   editingTask,
+  activeTaskId,
   taskTypeOptions,
+  onSelectTask,
   onEditTask,
   onToggleTask,
   onDeleteTask,
@@ -42,9 +46,10 @@ export function TaskList({
       <div className="tasks-list" id="tasksList">
         {project?.tasks.map((task, index) => {
           const isEditing = editingTask?.id === task.id;
+          const isSelected = activeTaskId === task.id;
 
           return (
-            <div key={task.id} className={`task-item${task.done ? " done" : ""}${isEditing ? " editing" : ""}`}>
+            <div key={task.id} className={`task-item${task.done ? " done" : ""}${isEditing ? " editing" : ""}${isSelected ? " selected" : ""}`}>
               <button
                 className="task-toggle"
                 type="button"
@@ -56,7 +61,18 @@ export function TaskList({
                 {task.done ? "✓" : ""}
               </button>
 
-              <div className={`task-copy${isEditing ? " editing" : ""}`}>
+              <div
+                className={`task-copy${isEditing ? " editing" : ""}${isSelected ? " selected" : ""}`}
+                role={isEditing ? undefined : "button"}
+                tabIndex={isEditing ? -1 : 0}
+                onClick={isEditing ? undefined : () => onSelectTask(task.id)}
+                onKeyDown={isEditing ? undefined : (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onSelectTask(task.id);
+                  }
+                }}
+              >
                 {isEditing ? (
                   <>
                     <div className="task-meta">Task {index + 1}</div>
@@ -73,7 +89,9 @@ export function TaskList({
                 ) : (
                   <>
                     <div className="task-name">{task.text}</div>
-                    <div className="task-meta">Task {index + 1}</div>
+                    <div className="task-meta">
+                      Task {index + 1}{isSelected ? " / Active timer task" : ""}
+                    </div>
                     {(task.type || task.agentEligible) ? (
                       <div className="task-badges">
                         {task.type ? <span className="task-badge">{task.type}</span> : null}

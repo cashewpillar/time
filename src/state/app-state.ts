@@ -16,7 +16,8 @@ export const DEFAULT_TASK_TYPES = ["development", "design", "product"] as const;
 
 export type AppAction =
   | { type: "hydrate-state"; state: PersistedState; status?: string }
-  | { type: "import-notion-options"; taskTypes: string[]; tasks: string[]; epics: string[] }
+  | { type: "import-notion-options"; taskTypes: string[]; workspaces: Array<{ name: string; projects: string[] }> }
+  | { type: "select-task"; taskId: string }
   | { type: "toggle-workspace-menu" }
   | { type: "toggle-project-menu" }
   | { type: "close-menus" }
@@ -50,6 +51,7 @@ export function defaultState(): AppState {
     isRunning: false,
     completedSessions: 0,
     lastTickAt: null,
+    activeTaskId: null,
     isTaskFormOpen: false,
     editingTaskId: null,
     isWorkspaceMenuOpen: false,
@@ -96,6 +98,11 @@ export function getEditingTask(state: AppState): Task | null {
   return project?.tasks.find((task) => task.id === state.editingTaskId) || null;
 }
 
+export function getSelectedTask(state: AppState): Task | null {
+  const project = getActiveProject(state);
+  return project?.tasks.find((task) => task.id === state.activeTaskId) || null;
+}
+
 export function getVisibleProjects(workspace: Workspace | null): Project[] {
   if (!workspace) return [];
   return workspace.visibleProjectIds
@@ -118,6 +125,7 @@ export function normalizeState(input?: PersistedState): AppState {
     isRunning: typeof input?.isRunning === "boolean" ? input.isRunning : base.isRunning,
     completedSessions: typeof input?.completedSessions === "number" && input.completedSessions >= 0 ? input.completedSessions : base.completedSessions,
     lastTickAt: typeof input?.lastTickAt === "number" ? input.lastTickAt : base.lastTickAt,
+    activeTaskId: typeof input?.activeTaskId === "string" ? input.activeTaskId : base.activeTaskId,
     isTaskFormOpen: typeof input?.isTaskFormOpen === "boolean" ? input.isTaskFormOpen : base.isTaskFormOpen,
     editingTaskId: typeof input?.editingTaskId === "string" ? input.editingTaskId : base.editingTaskId,
     isWorkspaceMenuOpen: typeof input?.isWorkspaceMenuOpen === "boolean" ? input.isWorkspaceMenuOpen : base.isWorkspaceMenuOpen,
@@ -159,6 +167,7 @@ export function normalizeState(input?: PersistedState): AppState {
   }
 
   next.workspaces = next.workspaces.map((workspace) => normalizeWorkspace(workspace));
+  next.activeTaskId = getDefaultActiveTaskId(getActiveProject(next), next.activeTaskId);
 
   if (next.isRunning && next.lastTickAt) {
     const elapsedSinceLastTick = Math.floor((Date.now() - next.lastTickAt) / 1000);
@@ -219,6 +228,15 @@ function normalizeWorkspace(workspace: Workspace): Workspace {
 
   next.visibleProjectIds = ensureVisibleProjectIds(next);
   return next;
+}
+
+function getDefaultActiveTaskId(project: Project | null, currentTaskId: string | null): string | null {
+  if (!project) return null;
+  if (currentTaskId && project.tasks.some((task) => task.id === currentTaskId)) {
+    return currentTaskId;
+  }
+
+  return project.tasks.find((task) => !task.done)?.id || project.tasks[0]?.id || null;
 }
 
 function ensureVisibleProjectIds(workspace: Workspace): string[] {
@@ -309,27 +327,33 @@ function toStableId(prefix: string, value: string, fallbackIndex: number): strin
   return `${prefix}-${slug || fallbackIndex + 1}`;
 }
 
-function buildWorkspaceImports(epics: string[], tasks: string[]): Workspace[] {
-  const cleanedEpics = epics.map((value) => value.trim()).filter(Boolean);
+function buildWorkspaceImports(workspaces: Array<{ name: string; projects: string[] }>): Workspace[] {
+  const cleanedWorkspaces = workspaces
+    .map((workspace) => ({
+      name: workspace.name.trim(),
+      projects: workspace.projects.map((value) => value.trim()).filter(Boolean)
+    }))
+    .filter((workspace) => workspace.name);
 
-  const workspaceNames = cleanedEpics.length ? cleanedEpics : ["Workspace"];
+  const workspaceSeeds = cleanedWorkspaces.length
+    ? cleanedWorkspaces
+    : [{ name: "Workspace", projects: ["Project 1"] }];
 
-  return workspaceNames.map((workspaceName, workspaceIndex) => {
-    const workspaceId = toStableId("workspace", workspaceName, workspaceIndex);
-    const defaultProjectName = tasks[workspaceIndex]?.trim() || "Project 1";
-    const projects = [{
-      id: `${workspaceId}-${toStableId("project", defaultProjectName, 0)}`,
-      name: defaultProjectName,
-      tasks: []
-    }];
+  return workspaceSeeds.map((workspace, workspaceIndex) => {
+    const workspaceId = toStableId("workspace", workspace.name, workspaceIndex);
+    const workspaceProjects = (workspace.projects.length ? workspace.projects : ["Project 1"]).map((projectName, projectIndex) => ({
+      id: `${workspaceId}-${toStableId("project", projectName, projectIndex)}`,
+      name: projectName,
+      tasks: [] as Task[]
+    }));
 
-    const activeProjectId = projects[0].id;
+    const activeProjectId = workspaceProjects[0].id;
     return normalizeWorkspace({
       id: workspaceId,
-      name: workspaceName,
+      name: workspace.name,
       activeProjectId,
-      visibleProjectIds: projects.map((project) => project.id),
-      projects
+      visibleProjectIds: workspaceProjects.slice(0, Math.min(2, workspaceProjects.length)).map((project) => project.id),
+      projects: workspaceProjects
     });
   });
 }
@@ -366,30 +390,41 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     case "set-status":
       return withStatus(state, action.status);
+    case "select-task":
+      return {
+        ...state,
+        activeTaskId: action.taskId,
+        status: "Task selected for the next session."
+      };
     case "import-notion-options": {
       const normalizedTaskTypes = action.taskTypes
         .map((value) => value.trim().toLowerCase())
         .filter(Boolean);
-      const nextWorkspaces = buildWorkspaceImports(action.epics, action.tasks);
+      const nextWorkspaces = buildWorkspaceImports(action.workspaces);
 
       return normalizeState({
         ...state,
         workspaces: nextWorkspaces,
         activeWorkspaceId: nextWorkspaces[0]?.id || state.activeWorkspaceId,
+        activeTaskId: null,
         customTaskTypes: Array.from(new Set([...state.customTaskTypes, ...normalizedTaskTypes])).sort(),
         isWorkspaceMenuOpen: false,
         isProjectMenuOpen: false,
-        status: "Imported workspaces, projects, and task types from Notion select values."
+        status: "Imported workspaces, projects, and task types from recent Notion entries."
       });
     }
-    case "select-workspace":
+    case "select-workspace": {
+      const nextWorkspace = state.workspaces.find((workspace) => workspace.id === action.workspaceId) || null;
+      const nextProject = nextWorkspace?.projects.find((project) => project.id === nextWorkspace.activeProjectId) || null;
       return normalizeState({
         ...state,
         activeWorkspaceId: action.workspaceId,
+        activeTaskId: getDefaultActiveTaskId(nextProject, null),
         isWorkspaceMenuOpen: false,
         isProjectMenuOpen: false,
         status: "Workspace selected."
       });
+    }
     case "create-workspace": {
       const nextNumber = state.workspaces.length + 1;
       const newWorkspaceId = `workspace-${action.now}`;
@@ -431,18 +466,25 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         workspaces: nextWorkspaces,
         activeWorkspaceId: state.activeWorkspaceId === action.workspaceId ? nextWorkspaces[0].id : state.activeWorkspaceId,
+        activeTaskId: state.activeWorkspaceId === action.workspaceId ? null : state.activeTaskId,
         isWorkspaceMenuOpen: false,
         isProjectMenuOpen: false,
         status: `${workspace?.name || "Workspace"} deleted.`
       });
     }
-    case "select-project":
+    case "select-project": {
+      const nextWorkspaces = updateActiveWorkspace(state, (workspace) => setActiveProjectOnWorkspace(workspace, action.projectId));
+      const nextProject = nextWorkspaces
+        .find((workspace) => workspace.id === state.activeWorkspaceId)
+        ?.projects.find((project) => project.id === action.projectId) || null;
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => setActiveProjectOnWorkspace(workspace, action.projectId)),
+        workspaces: nextWorkspaces,
+        activeTaskId: getDefaultActiveTaskId(nextProject, null),
         isProjectMenuOpen: false,
         status: "Project selected."
       });
+    }
     case "create-project": {
       const activeWorkspace = getActiveWorkspace(state);
       if (!activeWorkspace) return state;
@@ -461,6 +503,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             projectId
           );
         }),
+        activeTaskId: null,
         isProjectMenuOpen: false,
         status: `${nextProjectName} created.`
       });
@@ -497,6 +540,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
           }
           return normalizeWorkspace(nextWorkspace);
         }),
+        activeTaskId: activeWorkspace.activeProjectId === action.projectId ? null : state.activeTaskId,
         isProjectMenuOpen: false,
         status: `${project?.name || "Project"} deleted.`
       });
@@ -580,6 +624,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const nextCustomTypes = customType && !state.customTaskTypes.includes(customType)
         ? [...state.customTaskTypes, customType].sort()
         : state.customTaskTypes;
+      const nextTaskId = state.editingTaskId || `task-${action.now}`;
 
       return normalizeState({
         ...state,
@@ -609,7 +654,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               tasks: [
                 ...project.tasks,
                 {
-                  id: `task-${action.now}`,
+                  id: nextTaskId,
                   text: action.draft.text,
                   type: action.draft.type,
                   notes: action.draft.notes,
@@ -620,6 +665,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
             };
           })
         })),
+        activeTaskId: nextTaskId,
         customTaskTypes: nextCustomTypes,
         isTaskFormOpen: false,
         editingTaskId: null,
@@ -660,12 +706,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               : project
           )
         })),
+        activeTaskId: state.activeTaskId === action.taskId ? null : state.activeTaskId,
         status: "Task deleted."
       });
     case "clear-completed": {
       const activeProject = getActiveProject(state);
       if (!activeProject) return state;
       const before = activeProject.tasks.length;
+      const remainingTasks = activeProject.tasks.filter((task) => !task.done);
       return normalizeState({
         ...state,
         workspaces: updateActiveWorkspace(state, (workspace) => ({
@@ -679,6 +727,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               : project
           )
         })),
+        activeTaskId: getDefaultActiveTaskId({ ...activeProject, tasks: remainingTasks }, state.activeTaskId),
         status: before === activeProject.tasks.length ? "No completed tasks to clear." : "Completed tasks cleared."
       });
     }
