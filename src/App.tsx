@@ -55,9 +55,10 @@ function App() {
   }, [notionConfig.databaseId, notionConfig.ownerToken]);
 
   useEffect(() => {
-    const workspaceName = activeWorkspace?.name || "Workspace";
-    document.title = `${formatTime(state.elapsedSeconds)} / ${formatTime(state.targetSeconds)} - ${workspaceName}`;
-  }, [activeWorkspace?.name, state.elapsedSeconds, state.targetSeconds]);
+    const taskName = selectedTask?.text?.trim() || "No task selected";
+    const projectName = activeProject?.name || "Project";
+    document.title = `${taskName} - ${projectName}`;
+  }, [activeProject?.name, selectedTask?.text]);
 
   useEffect(() => {
     if (!state.isRunning) return undefined;
