@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { playTimerRing } from "./lib/audio";
+import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { formatTime, parseTimeInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
@@ -73,6 +74,10 @@ function App() {
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
       playTimerRing();
+      showTimerCompleteNotification(
+        selectedTask?.text?.trim() || "Focus session",
+        activeProject?.name || "Project"
+      );
 
       if (selectedTask && notionConfig.databaseId.trim() && notionConfig.ownerToken.trim()) {
         const completedAt = Date.now();
@@ -186,6 +191,7 @@ function App() {
     if (state.isRunning) {
       dispatch({ type: "pause-timer" });
     } else {
+      void requestTimerNotificationPermission();
       dispatch({ type: "start-timer", now: Date.now() });
     }
   }
