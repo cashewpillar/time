@@ -70,7 +70,7 @@ export function TimerCard({
 
       <div className="timer-actions">
         <button
-          className="primary-btn"
+          className={`primary-btn${!isRunning ? " idle-sheen" : ""}`}
           id="startPauseBtn"
           type="button"
           onClick={onToggleTimer}

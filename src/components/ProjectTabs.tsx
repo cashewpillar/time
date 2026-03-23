@@ -23,9 +23,11 @@ export function ProjectTabs({
   onDelete,
   onCreate
 }: ProjectTabsProps) {
+  const controlsClassName = `project-controls${visibleProjects.length <= 1 ? " single-project" : ""}`;
+
   return (
     <div className="project-bar">
-      <div id="projectTabs" className="project-controls">
+      <div id="projectTabs" className={controlsClassName}>
         {visibleProjects.map((project) => (
           <button
             key={project.id}

@@ -102,85 +102,94 @@ export function TaskComposer({
 
       {isOpen ? (
         <form className={`task-form open${className ? ` ${className}` : ""}`} id="taskForm" onSubmit={handleSubmit}>
-          <div className="task-input-row">
-            <input
-              ref={taskInputRef}
-              className="task-input"
-              id="taskInput"
-              type="text"
-              maxLength={100}
-              placeholder="What are you working on?"
-              aria-label="Task name"
-              value={form.text}
-              onChange={(event) => setForm((current) => ({ ...current, text: event.target.value }))}
-            />
-          </div>
-          <div className="task-input-row">
-            <select
-              className="task-input task-type-select"
-              id="taskTypeInput"
-              aria-label="Task type"
-              value={form.type}
-              onChange={(event) => {
-                const nextType = event.target.value;
-                setForm((current) => ({
-                  ...current,
-                  type: nextType,
-                  customType: nextType === "__custom__" ? current.customType : ""
-                }));
-              }}
-            >
-              <option value="">Select task type</option>
-              {taskTypeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {type[0].toUpperCase() + type.slice(1)}
-                </option>
-              ))}
-              <option value="__custom__">Add more...</option>
-            </select>
-          </div>
-          <div className={`task-input-row task-type-custom${form.type === "__custom__" ? " open" : ""}`} id="taskTypeCustomRow">
-            <input
-              className="task-input"
-              id="taskTypeCustomInput"
-              type="text"
-              maxLength={40}
-              placeholder="Add a task type"
-              aria-label="Add a task type"
-              value={form.customType}
-              onChange={(event) => setForm((current) => ({ ...current, customType: event.target.value }))}
-            />
-          </div>
-          <div className="task-input-row">
-            <textarea
-              className="task-input task-notes"
-              id="taskNotesInput"
-              maxLength={400}
-              placeholder="Task notes"
-              aria-label="Task notes"
-              value={form.notes}
-              onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
-            ></textarea>
-          </div>
-          <div className="task-input-row">
-            <label className="task-checkbox-row" htmlFor="taskAgentEligibleInput">
+          <div className="task-form-grid">
+            <div className="task-input-row">
               <input
-                className="task-checkbox"
-                id="taskAgentEligibleInput"
-                type="checkbox"
-                checked={form.agentEligible}
-                onChange={(event) => setForm((current) => ({ ...current, agentEligible: event.target.checked }))}
+                ref={taskInputRef}
+                className="task-input"
+                id="taskInput"
+                type="text"
+                maxLength={100}
+                placeholder="What are you working on?"
+                aria-label="Task name"
+                value={form.text}
+                onChange={(event) => setForm((current) => ({ ...current, text: event.target.value }))}
               />
-              <span>Can be handled by an AI agent</span>
-            </label>
+            </div>
+
+            <div className="task-input-row">
+              <select
+                className="task-input task-type-select"
+                id="taskTypeInput"
+                aria-label="Task type"
+                value={form.type}
+                onChange={(event) => {
+                  const nextType = event.target.value;
+                  setForm((current) => ({
+                    ...current,
+                    type: nextType,
+                    customType: nextType === "__custom__" ? current.customType : ""
+                  }));
+                }}
+              >
+                <option value="">Select task type</option>
+                {taskTypeOptions.map((type) => (
+                  <option key={type} value={type}>
+                    {type[0].toUpperCase() + type.slice(1)}
+                  </option>
+                ))}
+                <option value="__custom__">Add more...</option>
+              </select>
+            </div>
+
+            <div className={`task-input-row task-type-custom${form.type === "__custom__" ? " open" : ""}`} id="taskTypeCustomRow">
+              <input
+                className="task-input"
+                id="taskTypeCustomInput"
+                type="text"
+                maxLength={40}
+                placeholder="Add a task type"
+                aria-label="Add a task type"
+                value={form.customType}
+                onChange={(event) => setForm((current) => ({ ...current, customType: event.target.value }))}
+              />
+            </div>
+
+            <div className="task-input-row">
+              <textarea
+                className="task-input task-notes"
+                id="taskNotesInput"
+                maxLength={400}
+                placeholder="Task notes"
+                aria-label="Task notes"
+                value={form.notes}
+                onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+              ></textarea>
+            </div>
           </div>
-          <div className="task-form-actions">
-            <button className="task-form-btn primary" type="submit">
-              {editingTask ? "Save Changes" : "Save Task"}
-            </button>
-            <button className="task-form-btn ghost" type="button" id="cancelTaskBtn" onClick={onCancel}>
-              Cancel
-            </button>
+
+          <div className="task-form-footer">
+            <div className="task-input-row task-checkbox-wrap">
+              <label className="task-checkbox-row" htmlFor="taskAgentEligibleInput">
+                <input
+                  className="task-checkbox"
+                  id="taskAgentEligibleInput"
+                  type="checkbox"
+                  checked={form.agentEligible}
+                  onChange={(event) => setForm((current) => ({ ...current, agentEligible: event.target.checked }))}
+                />
+                <span>Can be handled by an AI agent</span>
+              </label>
+            </div>
+
+            <div className="task-form-actions">
+              <button className="task-form-btn primary" type="submit">
+                {editingTask ? "Save Changes" : "Save Task"}
+              </button>
+              <button className="task-form-btn ghost" type="button" id="cancelTaskBtn" onClick={onCancel}>
+                Cancel
+              </button>
+            </div>
           </div>
         </form>
       ) : null}

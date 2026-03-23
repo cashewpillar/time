@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { TaskComposer } from "./TaskComposer";
 import type { Project, Task, TaskDraft } from "../types/app";
 
@@ -8,6 +8,7 @@ type TaskListProps = {
   activeTaskId: string | null;
   taskTypeOptions: string[];
   isComposerOpen: boolean;
+  onQueueExpandedChange: (isExpanded: boolean) => void;
   onSelectTask: (taskId: string) => void;
   onEditTask: (taskId: string) => void;
   onToggleTask: (taskId: string) => void;
@@ -25,6 +26,7 @@ export function TaskList({
   activeTaskId,
   taskTypeOptions,
   isComposerOpen,
+  onQueueExpandedChange,
   onSelectTask,
   onEditTask,
   onToggleTask,
@@ -40,11 +42,13 @@ export function TaskList({
   const hasAnyTasks = Boolean(project?.tasks.length);
   const [isQueueOpen, setIsQueueOpen] = useState(() => !hasAnyTasks);
 
-  useEffect(() => {
-    if (!hasAnyTasks) {
-      setIsQueueOpen(true);
-    }
+  useLayoutEffect(() => {
+    setIsQueueOpen(!hasAnyTasks);
   }, [hasAnyTasks, project?.id]);
+
+  useEffect(() => {
+    onQueueExpandedChange(isQueueOpen && queueTasks.length > 0);
+  }, [isQueueOpen, onQueueExpandedChange, queueTasks.length]);
 
   function renderTask(task: Task, indexLabel: string, isSelected: boolean) {
     const isEditing = editingTask?.id === task.id;
@@ -66,11 +70,19 @@ export function TaskList({
           className={`task-copy${isEditing ? " editing" : ""}${isSelected ? " selected" : ""}`}
           role={isEditing ? undefined : "button"}
           tabIndex={isEditing ? -1 : 0}
-          onClick={isEditing ? undefined : () => onSelectTask(task.id)}
+          onClick={isEditing ? undefined : () => {
+            onSelectTask(task.id);
+            if (!isSelected) {
+              setIsQueueOpen(false);
+            }
+          }}
           onKeyDown={isEditing ? undefined : (event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
               onSelectTask(task.id);
+              if (!isSelected) {
+                setIsQueueOpen(false);
+              }
             }
           }}
         >

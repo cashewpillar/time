@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { playChime } from "./lib/audio";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { formatTime, parseTimeInput } from "./lib/time";
@@ -20,6 +20,7 @@ function App() {
   const { state, dispatch, notionConfig, updateNotionConfig, syncStatus, logTaskEntry } = usePersistentAppState();
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
+  const timerCardRef = useRef<HTMLElement | null>(null);
   const previousCompletedSessionsRef = useRef(state.completedSessions);
   const [isNotionConfigOpen, setIsNotionConfigOpen] = useState(false);
   const [databaseIdDraft, setDatabaseIdDraft] = useState(notionConfig.databaseId);
@@ -30,6 +31,8 @@ function App() {
     taskTypes: [],
     workspaces: []
   });
+  const [isTaskQueueExpanded, setIsTaskQueueExpanded] = useState(false);
+  const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
@@ -38,6 +41,12 @@ function App() {
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace), [activeWorkspace]);
   const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
   const notionConfigured = Boolean(notionConfig.databaseId.trim() && notionConfig.ownerToken.trim());
+  const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
+  const shouldExpandTasksCard = isTaskQueueExpanded || isTaskComposerOpen;
+
+  useLayoutEffect(() => {
+    setIsTaskQueueExpanded(!(activeProject?.tasks.length));
+  }, [activeProject?.id, activeProject?.tasks.length]);
 
   useEffect(() => {
     setDatabaseIdDraft(notionConfig.databaseId);
@@ -105,6 +114,28 @@ function App() {
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [dispatch]);
+
+  useEffect(() => {
+    const node = timerCardRef.current;
+    if (!node) return undefined;
+
+    const updateHeight = () => {
+      setCollapsedTasksHeight(node.getBoundingClientRect().height);
+    };
+
+    updateHeight();
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+    observer.observe(node);
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeight);
+    };
+  }, [state.targetSeconds, selectedTask?.text, state.isRunning, state.elapsedSeconds]);
 
   function promptForWorkspaceRename(workspaceId: string) {
     const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
@@ -316,8 +347,12 @@ function App() {
         ) : null}
       </header>
 
-      <main className="main">
-        <section className="tasks-section tasks-section-top" aria-labelledby="tasksHeading">
+      <main className={`main${state.isRunning ? " timer-first" : ""}`}>
+        <section
+          className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}`}
+          aria-labelledby="tasksHeading"
+          style={!shouldExpandTasksCard && collapsedTasksHeight ? { height: `${collapsedTasksHeight}px` } : undefined}
+        >
           <div ref={projectMenuRef}>
             <ProjectTabs
               visibleProjects={visibleProjects}
@@ -333,11 +368,13 @@ function App() {
           </div>
 
           <TaskList
+            key={activeProject?.id || "no-project"}
             project={activeProject}
             editingTask={editingTask}
             activeTaskId={state.activeTaskId}
             taskTypeOptions={taskTypeOptions}
-            isComposerOpen={state.isTaskFormOpen && !editingTask}
+            isComposerOpen={isTaskComposerOpen}
+            onQueueExpandedChange={setIsTaskQueueExpanded}
             onSelectTask={(taskId) => dispatch({ type: "select-task", taskId })}
             onEditTask={(taskId) => dispatch({ type: "edit-task", taskId })}
             onToggleTask={(taskId) => dispatch({ type: "toggle-task", taskId })}
@@ -350,7 +387,7 @@ function App() {
           />
         </section>
 
-        <section className="timer-card" aria-labelledby="timerTitle">
+        <section ref={timerCardRef} className="timer-card" aria-labelledby="timerTitle">
           <TimerCard
             elapsedSeconds={state.elapsedSeconds}
             targetSeconds={state.targetSeconds}
