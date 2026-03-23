@@ -6,6 +6,7 @@ type TimerCardProps = {
   targetSeconds: number;
   isRunning: boolean;
   selectedTaskName: string | null;
+  shouldHighlightStart: boolean;
   onToggleTimer: () => void;
   onReset: () => void;
   onCommitTarget: (value: string) => boolean;
@@ -16,6 +17,7 @@ export function TimerCard({
   targetSeconds,
   isRunning,
   selectedTaskName,
+  shouldHighlightStart,
   onToggleTimer,
   onReset,
   onCommitTarget
@@ -70,7 +72,7 @@ export function TimerCard({
 
       <div className="timer-actions">
         <button
-          className={`primary-btn${!isRunning ? " idle-sheen" : ""}`}
+          className={`primary-btn${shouldHighlightStart ? " idle-sheen" : ""}`}
           id="startPauseBtn"
           type="button"
           onClick={onToggleTimer}

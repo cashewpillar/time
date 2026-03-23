@@ -47,8 +47,8 @@ export function TaskList({
   }, [hasAnyTasks, project?.id]);
 
   useEffect(() => {
-    onQueueExpandedChange(isQueueOpen && queueTasks.length > 0);
-  }, [isQueueOpen, onQueueExpandedChange, queueTasks.length]);
+    onQueueExpandedChange(isQueueOpen && (queueTasks.length > 0 || selectedTask !== null));
+  }, [isQueueOpen, onQueueExpandedChange, queueTasks.length, selectedTask]);
 
   function renderTask(task: Task, indexLabel: string, isSelected: boolean) {
     const isEditing = editingTask?.id === task.id;
@@ -158,6 +158,7 @@ export function TaskList({
                 onOpen={onOpenComposer}
                 onCancel={onCancelComposer}
                 onSave={onSaveTask}
+                highlightTrigger={false}
               />
 
               <div className="tasks-list task-queue-list">
@@ -182,6 +183,7 @@ export function TaskList({
               onOpen={onOpenComposer}
               onCancel={onCancelComposer}
               onSave={onSaveTask}
+              highlightTrigger={!hasAnyTasks}
             />
           ) : null}
         </div>

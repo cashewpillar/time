@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { playChime } from "./lib/audio";
+import { playTimerRing } from "./lib/audio";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { formatTime, parseTimeInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
@@ -43,6 +43,7 @@ function App() {
   const notionConfigured = Boolean(notionConfig.databaseId.trim() && notionConfig.ownerToken.trim());
   const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
   const shouldExpandTasksCard = isTaskQueueExpanded || isTaskComposerOpen;
+  const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedTask);
 
   useLayoutEffect(() => {
     setIsTaskQueueExpanded(!(activeProject?.tasks.length));
@@ -70,7 +71,7 @@ function App() {
 
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
-      playChime();
+      playTimerRing();
 
       if (selectedTask && notionConfig.databaseId.trim() && notionConfig.ownerToken.trim()) {
         const completedAt = Date.now();
@@ -347,7 +348,7 @@ function App() {
         ) : null}
       </header>
 
-      <main className={`main${state.isRunning ? " timer-first" : ""}`}>
+      <main className="main">
         <section
           className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}`}
           aria-labelledby="tasksHeading"
@@ -393,6 +394,7 @@ function App() {
             targetSeconds={state.targetSeconds}
             isRunning={state.isRunning}
             selectedTaskName={selectedTask?.text || null}
+            shouldHighlightStart={shouldHighlightTimerStart}
             onToggleTimer={handleToggleTimer}
             onReset={() => dispatch({ type: "reset-timer" })}
             onCommitTarget={handleCommitTarget}

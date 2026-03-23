@@ -10,6 +10,7 @@ type TaskComposerProps = {
   onCancel: () => void;
   onSave: (draft: TaskDraft, customType: string) => void;
   hideTrigger?: boolean;
+  highlightTrigger?: boolean;
   className?: string;
 };
 
@@ -37,6 +38,7 @@ export function TaskComposer({
   onCancel,
   onSave,
   hideTrigger = false,
+  highlightTrigger = false,
   className = ""
 }: TaskComposerProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -95,7 +97,7 @@ export function TaskComposer({
   return (
     <>
       {!isOpen && !hideTrigger ? (
-        <button className="add-task-tile" id="showTaskFormBtn" type="button" onClick={onOpen}>
+        <button className={`add-task-tile${highlightTrigger ? " idle-sheen" : ""}`} id="showTaskFormBtn" type="button" onClick={onOpen}>
           ⊕ Add Task
         </button>
       ) : null}
