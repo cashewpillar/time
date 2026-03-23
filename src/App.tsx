@@ -42,7 +42,7 @@ function App() {
   const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
   const notionConfigured = Boolean(notionConfig.databaseId.trim() && notionConfig.ownerToken.trim());
   const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
-  const shouldExpandTasksCard = isTaskQueueExpanded || isTaskComposerOpen;
+  const shouldExpandTasksCard = isTaskQueueExpanded || state.isTaskFormOpen;
   const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedTask);
 
   useLayoutEffect(() => {
