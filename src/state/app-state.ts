@@ -15,6 +15,8 @@ export const DEFAULT_TARGET_SECONDS = 20 * 60;
 export const DEFAULT_TASK_TYPES = ["development", "design", "product"] as const;
 
 export type AppAction =
+  | { type: "hydrate-state"; state: PersistedState; status?: string }
+  | { type: "import-notion-options"; taskTypes: string[]; tasks: string[]; epics: string[] }
   | { type: "toggle-workspace-menu" }
   | { type: "toggle-project-menu" }
   | { type: "close-menus" }
@@ -297,8 +299,50 @@ function withStatus(state: AppState, status: string): AppState {
   return { ...state, status };
 }
 
+function toStableId(prefix: string, value: string, fallbackIndex: number): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+  return `${prefix}-${slug || fallbackIndex + 1}`;
+}
+
+function buildWorkspaceImports(epics: string[], tasks: string[]): Workspace[] {
+  const cleanedEpics = epics.map((value) => value.trim()).filter(Boolean);
+
+  const workspaceNames = cleanedEpics.length ? cleanedEpics : ["Workspace"];
+
+  return workspaceNames.map((workspaceName, workspaceIndex) => {
+    const workspaceId = toStableId("workspace", workspaceName, workspaceIndex);
+    const defaultProjectName = tasks[workspaceIndex]?.trim() || "Project 1";
+    const projects = [{
+      id: `${workspaceId}-${toStableId("project", defaultProjectName, 0)}`,
+      name: defaultProjectName,
+      tasks: []
+    }];
+
+    const activeProjectId = projects[0].id;
+    return normalizeWorkspace({
+      id: workspaceId,
+      name: workspaceName,
+      activeProjectId,
+      visibleProjectIds: projects.map((project) => project.id),
+      projects
+    });
+  });
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
+    case "hydrate-state": {
+      const nextState = normalizeState(action.state);
+      if (action.status) {
+        nextState.status = action.status;
+      }
+      return nextState;
+    }
     case "toggle-workspace-menu":
       return {
         ...state,
@@ -322,6 +366,22 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     case "set-status":
       return withStatus(state, action.status);
+    case "import-notion-options": {
+      const normalizedTaskTypes = action.taskTypes
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean);
+      const nextWorkspaces = buildWorkspaceImports(action.epics, action.tasks);
+
+      return normalizeState({
+        ...state,
+        workspaces: nextWorkspaces,
+        activeWorkspaceId: nextWorkspaces[0]?.id || state.activeWorkspaceId,
+        customTaskTypes: Array.from(new Set([...state.customTaskTypes, ...normalizedTaskTypes])).sort(),
+        isWorkspaceMenuOpen: false,
+        isProjectMenuOpen: false,
+        status: "Imported workspaces, projects, and task types from Notion select values."
+      });
+    }
     case "select-workspace":
       return normalizeState({
         ...state,

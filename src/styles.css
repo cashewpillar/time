@@ -61,6 +61,134 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
+.sync-bar {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.sync-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.sync-dot.connected {
+  background: #9cffad;
+}
+
+.sync-toggle,
+.notion-save {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.notion-secondary {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.notion-save:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.notion-panel {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+  width: min(100%, 520px);
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.notion-field {
+  display: grid;
+  gap: 6px;
+}
+
+.notion-field span {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notion-field input {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  padding: 12px 14px;
+}
+
+.notion-field input::placeholder {
+  color: var(--text-faint);
+}
+
+.notion-options {
+  display: grid;
+  gap: 12px;
+}
+
+.notion-options-group {
+  display: grid;
+  gap: 8px;
+}
+
+.notion-options-label {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notion-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notion-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.notion-helper {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+}
+
+.notion-helper.error {
+  color: #ffe3e3;
+}
+
 .workspace-trigger {
   display: inline-flex;
   align-items: center;
@@ -375,6 +503,10 @@ button {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.task-item.editing {
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .task-toggle {
   width: 26px;
   height: 26px;
@@ -395,6 +527,11 @@ button {
 .task-copy {
   flex: 1;
   min-width: 0;
+}
+
+.task-copy.editing {
+  display: grid;
+  gap: 10px;
 }
 
 .task-name {
@@ -466,6 +603,12 @@ button {
 
 .task-form.open {
   display: block;
+}
+
+.task-form-inline {
+  margin-top: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .task-input-row,

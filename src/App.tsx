@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { playChime } from "./lib/audio";
+import { fetchNotionSelectOptions, type NotionSelectOptions } from "./lib/notion";
 import { formatTime, parseTimeInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
 import { SessionSummary } from "./components/SessionSummary";
@@ -17,16 +18,30 @@ import {
 } from "./state/app-state";
 
 function App() {
-  const [state, dispatch] = usePersistentAppState();
+  const { state, dispatch, notionConfig, updateNotionConfig, syncStatus, logTaskEntry } = usePersistentAppState();
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const previousCompletedSessionsRef = useRef(state.completedSessions);
+  const [isNotionConfigOpen, setIsNotionConfigOpen] = useState(false);
+  const [databaseIdDraft, setDatabaseIdDraft] = useState(notionConfig.databaseId);
+  const [isLoadingNotionOptions, setIsLoadingNotionOptions] = useState(false);
+  const [notionOptionsError, setNotionOptionsError] = useState("");
+  const [notionOptions, setNotionOptions] = useState<NotionSelectOptions>({
+    taskTypes: [],
+    tasks: [],
+    epics: []
+  });
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
   const editingTask = useMemo(() => getEditingTask(state), [state]);
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace), [activeWorkspace]);
   const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
+  const notionConfigured = Boolean(notionConfig.databaseId.trim());
+
+  useEffect(() => {
+    setDatabaseIdDraft(notionConfig.databaseId);
+  }, [notionConfig.databaseId]);
 
   useEffect(() => {
     const workspaceName = activeWorkspace?.name || "Workspace";
@@ -142,12 +157,59 @@ function App() {
       return;
     }
 
+    const now = Date.now();
+
     dispatch({
       type: "save-task",
       draft,
       customType,
-      now: Date.now()
+      now
     });
+
+    void logTaskEntry({
+      entry: draft.text.trim(),
+      taskType: draft.type.trim() || "Uncategorized",
+      task: activeProject.name,
+      epic: activeWorkspace?.name || "Workspace",
+      minutes: Math.max(1, Math.round(state.targetSeconds / 60)),
+      startDatetime: new Date(now).toISOString(),
+      notes: draft.notes.trim(),
+      aiWorkflow: draft.agentEligible
+    });
+  }
+
+  function handleSaveNotionConfig() {
+    updateNotionConfig({
+      databaseId: databaseIdDraft
+    });
+  }
+
+  async function handleFetchNotionOptions() {
+    const trimmedDatabaseId = databaseIdDraft.trim();
+    if (!trimmedDatabaseId) {
+      setNotionOptionsError("Add a database ID first.");
+      setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
+      return;
+    }
+
+    setIsLoadingNotionOptions(true);
+    setNotionOptionsError("");
+
+    try {
+      const options = await fetchNotionSelectOptions({ databaseId: trimmedDatabaseId });
+      setNotionOptions(options);
+      dispatch({
+        type: "import-notion-options",
+        taskTypes: options.taskTypes,
+        tasks: options.tasks,
+        epics: options.epics
+      });
+    } catch (error) {
+      setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
+      setNotionOptionsError(error instanceof Error ? error.message : "Failed to load select options.");
+    } finally {
+      setIsLoadingNotionOptions(false);
+    }
   }
 
   return (
@@ -166,6 +228,71 @@ function App() {
             onCreate={() => dispatch({ type: "create-workspace", now: Date.now() })}
           />
         </div>
+
+        <div className="sync-bar">
+          <div className="sync-indicator">
+            <span className={`sync-dot${notionConfigured && syncStatus.phase !== "error" ? " connected" : ""}`}></span>
+            <span>{syncStatus.message}</span>
+          </div>
+          <button className="sync-toggle" type="button" onClick={() => setIsNotionConfigOpen((open) => !open)}>
+            {isNotionConfigOpen ? "Hide Notion" : "Configure Notion"}
+          </button>
+        </div>
+
+        {isNotionConfigOpen ? (
+          <div className="notion-panel">
+            <label className="notion-field">
+              <span>Database ID</span>
+              <input
+                type="text"
+                placeholder="32-char database ID"
+                value={databaseIdDraft}
+                onChange={(event) => setDatabaseIdDraft(event.target.value)}
+              />
+            </label>
+
+            <button className="notion-save" type="button" onClick={handleSaveNotionConfig}>
+              Save database locally
+            </button>
+
+            <button className="notion-save notion-secondary" type="button" onClick={handleFetchNotionOptions} disabled={isLoadingNotionOptions}>
+              {isLoadingNotionOptions ? "Loading options..." : "Fetch select values"}
+            </button>
+
+            {notionOptionsError ? <div className="notion-helper error">{notionOptionsError}</div> : null}
+
+            {notionOptions.taskTypes.length || notionOptions.tasks.length || notionOptions.epics.length ? (
+              <div className="notion-options">
+                <div className="notion-options-group">
+                  <div className="notion-options-label">Task type</div>
+                  <div className="notion-chip-list">
+                    {notionOptions.taskTypes.length ? notionOptions.taskTypes.map((value) => (
+                      <span key={value} className="notion-chip">{value}</span>
+                    )) : <span className="notion-helper">No task type values found.</span>}
+                  </div>
+                </div>
+
+                <div className="notion-options-group">
+                  <div className="notion-options-label">Task</div>
+                  <div className="notion-chip-list">
+                    {notionOptions.tasks.length ? notionOptions.tasks.map((value) => (
+                      <span key={value} className="notion-chip">{value}</span>
+                    )) : <span className="notion-helper">No task values found.</span>}
+                  </div>
+                </div>
+
+                <div className="notion-options-group">
+                  <div className="notion-options-label">Epic</div>
+                  <div className="notion-chip-list">
+                    {notionOptions.epics.length ? notionOptions.epics.map((value) => (
+                      <span key={value} className="notion-chip">{value}</span>
+                    )) : <span className="notion-helper">No epic values found.</span>}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       <main className="main">
@@ -199,15 +326,19 @@ function App() {
         <section className="tasks-section" aria-labelledby="tasksHeading">
           <TaskList
             project={activeProject}
+            editingTask={editingTask}
+            taskTypeOptions={taskTypeOptions}
             onEditTask={(taskId) => dispatch({ type: "edit-task", taskId })}
             onToggleTask={(taskId) => dispatch({ type: "toggle-task", taskId })}
             onDeleteTask={(taskId) => dispatch({ type: "delete-task", taskId })}
             onClearCompleted={() => dispatch({ type: "clear-completed" })}
+            onCancelEdit={() => dispatch({ type: "close-task-form" })}
+            onSaveTask={handleSaveTask}
           />
 
           <TaskComposer
-            isOpen={state.isTaskFormOpen}
-            editingTask={editingTask}
+            isOpen={state.isTaskFormOpen && !editingTask}
+            editingTask={null}
             taskTypeOptions={taskTypeOptions}
             onOpen={() => dispatch({ type: "open-task-form" })}
             onCancel={() => dispatch({ type: "close-task-form" })}

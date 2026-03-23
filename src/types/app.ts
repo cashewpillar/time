@@ -51,3 +51,19 @@ export type PersistedState = Partial<AppState> & {
   workspaces?: unknown;
   customTaskTypes?: unknown;
 };
+
+export type NotionConfig = {
+  databaseId: string;
+};
+
+export type NotionSyncPhase =
+  | "idle"
+  | "loading"
+  | "saving"
+  | "synced"
+  | "error";
+
+export type NotionSyncStatus = {
+  phase: NotionSyncPhase;
+  message: string;
+};
