@@ -1,5 +1,5 @@
-const { test, expect } = require("@playwright/test");
-const { AppPage } = require("./app.page");
+import { expect, test } from "@playwright/test";
+import { AppPage } from "./app.page";
 
 test.beforeEach(async ({ page }) => {
   const app = new AppPage(page);
@@ -74,6 +74,6 @@ test("task card controls are top-aligned", async ({ page }) => {
   const alignment = await page.locator(".task-item").evaluate((element) => getComputedStyle(element).alignItems);
   const checkboxAlignment = await page.locator(".task-checkbox-row").evaluate((element) => getComputedStyle(element).alignItems);
 
-  await expect(alignment).toBe("flex-start");
-  await expect(checkboxAlignment).toBe("flex-start");
+  expect(alignment).toBe("flex-start");
+  expect(checkboxAlignment).toBe("flex-start");
 });

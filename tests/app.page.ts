@@ -1,7 +1,35 @@
-const { expect } = require("@playwright/test");
+import { expect, type Locator, type Page } from "@playwright/test";
 
-class AppPage {
-  constructor(page) {
+type TaskInput = {
+  name: string;
+  type: string;
+  notes?: string;
+  aiEligible?: boolean;
+  customType?: string;
+};
+
+type TaskEditInput = {
+  type?: string;
+  notes?: string;
+  aiEligible?: boolean;
+  customType?: string;
+};
+
+export class AppPage {
+  readonly page: Page;
+  readonly workspaceTrigger: Locator;
+  readonly workspaceDropdown: Locator;
+  readonly projectTabs: Locator;
+  readonly projectMenuTrigger: Locator;
+  readonly projectDropdown: Locator;
+  readonly addTaskButton: Locator;
+  readonly taskNameInput: Locator;
+  readonly taskTypeSelect: Locator;
+  readonly customTaskTypeInput: Locator;
+  readonly taskNotesInput: Locator;
+  readonly aiEligibleCheckbox: Locator;
+
+  constructor(page: Page) {
     this.page = page;
     this.workspaceTrigger = page.locator("#workspaceTrigger");
     this.workspaceDropdown = page.locator("#workspaceDropdown");
@@ -16,31 +44,31 @@ class AppPage {
     this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
   }
 
-  async goto() {
+  async goto(): Promise<void> {
     await this.page.addInitScript(() => {
       localStorage.clear();
     });
     await this.page.goto("/time/");
   }
 
-  async openWorkspaceMenu() {
+  async openWorkspaceMenu(): Promise<void> {
     await this.workspaceTrigger.click();
     await expect(this.workspaceDropdown).toBeVisible();
   }
 
-  async openProjectMenu() {
+  async openProjectMenu(): Promise<void> {
     await this.projectMenuTrigger.click();
     await expect(this.projectDropdown).toBeVisible();
   }
 
-  async acceptPromptAndClick(trigger, value) {
+  async acceptPromptAndClick(trigger: Locator, value: string): Promise<void> {
     this.page.once("dialog", async (dialog) => {
       await dialog.accept(value);
     });
     await trigger.click();
   }
 
-  async renameWorkspace(currentName, nextName) {
+  async renameWorkspace(currentName: string, nextName: string): Promise<void> {
     await this.openWorkspaceMenu();
     await this.acceptPromptAndClick(
       this.workspaceDropdown.getByRole("button", {
@@ -51,7 +79,7 @@ class AppPage {
     );
   }
 
-  async renameProject(currentName, nextName) {
+  async renameProject(currentName: string, nextName: string): Promise<void> {
     await this.openProjectMenu();
     await this.acceptPromptAndClick(
       this.projectDropdown.getByRole("button", {
@@ -62,16 +90,16 @@ class AppPage {
     );
   }
 
-  async selectProject(name) {
+  async selectProject(name: string): Promise<void> {
     await this.openProjectMenu();
     await this.projectDropdown.getByRole("button", { name, exact: true }).click();
   }
 
-  async openAddTaskForm() {
+  async openAddTaskForm(): Promise<void> {
     await this.addTaskButton.click();
   }
 
-  async createTask({ name, type, notes, aiEligible = false, customType }) {
+  async createTask({ name, type, notes, aiEligible = false, customType }: TaskInput): Promise<void> {
     await this.openAddTaskForm();
     await this.taskNameInput.fill(name);
     await this.taskTypeSelect.selectOption(type);
@@ -92,7 +120,7 @@ class AppPage {
     await this.page.getByRole("button", { name: /save task/i }).click();
   }
 
-  async editFirstTask({ type, notes, aiEligible, customType }) {
+  async editFirstTask({ type, notes, aiEligible, customType }: TaskEditInput): Promise<void> {
     await this.page.getByRole("button", { name: /edit task/i }).click();
 
     if (type) {
@@ -119,5 +147,3 @@ class AppPage {
     await this.page.getByRole("button", { name: /save changes/i }).click();
   }
 }
-
-module.exports = { AppPage };
