@@ -5,6 +5,7 @@ type TimerCardProps = {
   elapsedSeconds: number;
   targetSeconds: number;
   isRunning: boolean;
+  selectedTaskName: string | null;
   onToggleTimer: () => void;
   onReset: () => void;
   onCommitTarget: (value: string) => boolean;
@@ -14,6 +15,7 @@ export function TimerCard({
   elapsedSeconds,
   targetSeconds,
   isRunning,
+  selectedTaskName,
   onToggleTimer,
   onReset,
   onCommitTarget
@@ -34,6 +36,11 @@ export function TimerCard({
 
   return (
     <>
+      <div className="timer-focus-banner">
+        <div className="timer-focus-label">Now focusing</div>
+        <div className="timer-focus-name">{selectedTaskName || "Pick a task to start"}</div>
+      </div>
+
       <div className="timer-config-row">
         <label className="timer-config" htmlFor="timerTargetInput">
           Target
@@ -62,7 +69,13 @@ export function TimerCard({
       </div>
 
       <div className="timer-actions">
-        <button className="primary-btn" id="startPauseBtn" type="button" onClick={onToggleTimer}>
+        <button
+          className="primary-btn"
+          id="startPauseBtn"
+          type="button"
+          onClick={onToggleTimer}
+          disabled={!selectedTaskName && !isRunning}
+        >
           {startPauseLabel}
         </button>
         <button className="ghost-btn" id="resetBtn" type="button" onClick={onReset}>

@@ -3,8 +3,6 @@ import { playChime } from "./lib/audio";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { formatTime, parseTimeInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
-import { SessionSummary } from "./components/SessionSummary";
-import { TaskComposer } from "./components/TaskComposer";
 import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
@@ -107,14 +105,6 @@ function App() {
     document.addEventListener("mousedown", handleOutsideClick);
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, [dispatch]);
-
-  const sessionMessage = state.isRunning
-    ? `Focusing to ${formatTime(state.targetSeconds)}`
-    : state.elapsedSeconds >= state.targetSeconds
-      ? "Session complete!"
-      : state.elapsedSeconds > 0
-        ? "Keep going!"
-        : "Time to focus!";
 
   function promptForWorkspaceRename(workspaceId: string) {
     const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
@@ -327,7 +317,7 @@ function App() {
       </header>
 
       <main className="main">
-        <section className="timer-card" aria-labelledby="timerTitle">
+        <section className="tasks-section tasks-section-top" aria-labelledby="tasksHeading">
           <div ref={projectMenuRef}>
             <ProjectTabs
               visibleProjects={visibleProjects}
@@ -342,43 +332,34 @@ function App() {
             />
           </div>
 
-          <TimerCard
-            elapsedSeconds={state.elapsedSeconds}
-            targetSeconds={state.targetSeconds}
-            isRunning={state.isRunning}
-            onToggleTimer={handleToggleTimer}
-            onReset={() => dispatch({ type: "reset-timer" })}
-            onCommitTarget={handleCommitTarget}
-          />
-        </section>
-
-        <SessionSummary completedSessions={state.completedSessions} message={sessionMessage} />
-
-        <section className="tasks-section" aria-labelledby="tasksHeading">
           <TaskList
             project={activeProject}
             editingTask={editingTask}
             activeTaskId={state.activeTaskId}
             taskTypeOptions={taskTypeOptions}
+            isComposerOpen={state.isTaskFormOpen && !editingTask}
             onSelectTask={(taskId) => dispatch({ type: "select-task", taskId })}
             onEditTask={(taskId) => dispatch({ type: "edit-task", taskId })}
             onToggleTask={(taskId) => dispatch({ type: "toggle-task", taskId })}
             onDeleteTask={(taskId) => dispatch({ type: "delete-task", taskId })}
             onClearCompleted={() => dispatch({ type: "clear-completed" })}
+            onOpenComposer={() => dispatch({ type: "open-task-form" })}
             onCancelEdit={() => dispatch({ type: "close-task-form" })}
+            onCancelComposer={() => dispatch({ type: "close-task-form" })}
             onSaveTask={handleSaveTask}
           />
+        </section>
 
-          <TaskComposer
-            isOpen={state.isTaskFormOpen && !editingTask}
-            editingTask={null}
-            taskTypeOptions={taskTypeOptions}
-            onOpen={() => dispatch({ type: "open-task-form" })}
-            onCancel={() => dispatch({ type: "close-task-form" })}
-            onSave={handleSaveTask}
+        <section className="timer-card" aria-labelledby="timerTitle">
+          <TimerCard
+            elapsedSeconds={state.elapsedSeconds}
+            targetSeconds={state.targetSeconds}
+            isRunning={state.isRunning}
+            selectedTaskName={selectedTask?.text || null}
+            onToggleTimer={handleToggleTimer}
+            onReset={() => dispatch({ type: "reset-timer" })}
+            onCommitTarget={handleCommitTarget}
           />
-
-          <div className="status" id="statusText">{state.status}</div>
         </section>
       </main>
     </div>
