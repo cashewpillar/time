@@ -88,6 +88,16 @@ function getPropertyText(property) {
   return "";
 }
 
+function firstExistingProperty(properties, candidates) {
+  for (const candidate of candidates) {
+    if (candidate && Object.prototype.hasOwnProperty.call(properties, candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function getPropertyMultiSelect(property) {
   if (!property || typeof property !== "object" || property.type !== "multi_select") return [];
 
@@ -138,13 +148,27 @@ async function fetchRecentEntries(databaseId, env, days) {
 
     for (const result of payload.results || []) {
       const properties = result?.properties || {};
-      const workspaceName = getPropertyText(properties.Epic) || "Workspace";
-      const projectName = getPropertyText(properties.Task) || getPropertyText(properties.Project) || "Project";
+      const workspaceName =
+        getPropertyText(properties.Workspace) ||
+        getPropertyText(properties.Epic) ||
+        "Workspace";
+      const projectName =
+        getPropertyText(properties.Project) ||
+        getPropertyText(properties.Task) ||
+        "Project";
 
       if (!workspaces.has(workspaceName)) {
-        workspaces.set(workspaceName, new Set());
+        workspaces.set(workspaceName, new Map());
       }
-      workspaces.get(workspaceName).add(projectName);
+      if (!workspaces.get(workspaceName).has(projectName)) {
+        workspaces.get(workspaceName).set(projectName, []);
+      }
+      workspaces.get(workspaceName).get(projectName).push({
+        entry: getPropertyText(properties.Entry) || "Untitled entry",
+        taskType: getPropertyMultiSelect(properties["Task type"])[0] || "",
+        notes: getPropertyText(properties.Notes),
+        aiWorkflow: Boolean(properties["AI workflow"]?.checkbox)
+      });
 
       for (const taskType of getPropertyMultiSelect(properties["Task type"])) {
         taskTypes.add(taskType);
@@ -166,7 +190,12 @@ async function fetchRecentEntries(databaseId, env, days) {
       workspaces: Array.from(workspaces.entries())
         .map(([name, projects]) => ({
           name,
-          projects: Array.from(projects).sort((left, right) => left.localeCompare(right))
+          projects: Array.from(projects.entries())
+            .map(([projectName, tasks]) => ({
+              name: projectName,
+              tasks
+            }))
+            .sort((left, right) => left.name.localeCompare(right.name))
         }))
         .sort((left, right) => left.name.localeCompare(right.name))
     }
@@ -226,8 +255,8 @@ export default {
         const properties = payload?.properties || {};
         return json({
           taskTypes: extractSelectOptions(properties["Task type"]),
-          tasks: extractSelectOptions(properties.Task),
-          epics: extractSelectOptions(properties.Epic)
+          tasks: extractSelectOptions(properties.Project) || extractSelectOptions(properties.Task),
+          epics: extractSelectOptions(properties.Workspace) || extractSelectOptions(properties.Epic)
         }, env, origin);
       }
 
@@ -245,6 +274,34 @@ export default {
         return json({ message: "Missing properties payload" }, env, origin, { status: 400 });
       }
 
+      const schemaResponse = await fetch(`https://api.notion.com/v1/databases/${databaseId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${env.NOTION_API_KEY}`,
+          "Notion-Version": "2022-06-28"
+        }
+      });
+
+      const schemaPayload = await schemaResponse.json();
+      if (!schemaResponse.ok) {
+        return json(schemaPayload, env, origin, { status: schemaResponse.status });
+      }
+
+      const schemaProperties = schemaPayload?.properties || {};
+      const projectPropertyName = firstExistingProperty(schemaProperties, ["Project", "Task"]);
+      const workspacePropertyName = firstExistingProperty(schemaProperties, ["Workspace", "Epic"]);
+      const nextProperties = { ...properties };
+
+      if (projectPropertyName !== "Task" && nextProperties.Task) {
+        nextProperties[projectPropertyName || "Project"] = nextProperties.Task;
+        delete nextProperties.Task;
+      }
+
+      if (workspacePropertyName !== "Epic" && nextProperties.Epic) {
+        nextProperties[workspacePropertyName || "Workspace"] = nextProperties.Epic;
+        delete nextProperties.Epic;
+      }
+
       const notionResponse = await fetch("https://api.notion.com/v1/pages", {
         method: "POST",
         headers: {
@@ -254,7 +311,7 @@ export default {
         },
         body: JSON.stringify({
           parent: { database_id: databaseId },
-          properties
+          properties: nextProperties
         })
       });
 

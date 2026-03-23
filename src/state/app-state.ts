@@ -16,7 +16,22 @@ export const DEFAULT_TASK_TYPES = ["development", "design", "product"] as const;
 
 export type AppAction =
   | { type: "hydrate-state"; state: PersistedState; status?: string }
-  | { type: "import-notion-options"; taskTypes: string[]; workspaces: Array<{ name: string; projects: string[] }> }
+  | {
+      type: "import-notion-options";
+      taskTypes: string[];
+      workspaces: Array<{
+        name: string;
+        projects: Array<{
+          name: string;
+          tasks: Array<{
+            entry: string;
+            taskType: string;
+            notes: string;
+            aiWorkflow: boolean;
+          }>;
+        }>;
+      }>;
+    }
   | { type: "select-task"; taskId: string }
   | { type: "toggle-workspace-menu" }
   | { type: "toggle-project-menu" }
@@ -327,25 +342,52 @@ function toStableId(prefix: string, value: string, fallbackIndex: number): strin
   return `${prefix}-${slug || fallbackIndex + 1}`;
 }
 
-function buildWorkspaceImports(workspaces: Array<{ name: string; projects: string[] }>): Workspace[] {
+function buildWorkspaceImports(workspaces: Array<{
+  name: string;
+  projects: Array<{
+    name: string;
+    tasks: Array<{
+      entry: string;
+      taskType: string;
+      notes: string;
+      aiWorkflow: boolean;
+    }>;
+  }>;
+}>): Workspace[] {
   const cleanedWorkspaces = workspaces
     .map((workspace) => ({
       name: workspace.name.trim(),
-      projects: workspace.projects.map((value) => value.trim()).filter(Boolean)
+      projects: workspace.projects
+        .map((project) => ({
+          name: project.name.trim(),
+          tasks: project.tasks.filter((task) => task.entry.trim())
+        }))
+        .filter((project) => project.name)
     }))
     .filter((workspace) => workspace.name);
 
   const workspaceSeeds = cleanedWorkspaces.length
     ? cleanedWorkspaces
-    : [{ name: "Workspace", projects: ["Project 1"] }];
+    : [{ name: "Workspace", projects: [{ name: "Project 1", tasks: [] }] }];
 
   return workspaceSeeds.map((workspace, workspaceIndex) => {
     const workspaceId = toStableId("workspace", workspace.name, workspaceIndex);
-    const workspaceProjects = (workspace.projects.length ? workspace.projects : ["Project 1"]).map((projectName, projectIndex) => ({
-      id: `${workspaceId}-${toStableId("project", projectName, projectIndex)}`,
-      name: projectName,
-      tasks: [] as Task[]
-    }));
+    const workspaceProjects = (workspace.projects.length ? workspace.projects : [{ name: "Project 1", tasks: [] }]).map((project, projectIndex) => {
+      const projectId = `${workspaceId}-${toStableId("project", project.name, projectIndex)}`;
+
+      return {
+        id: projectId,
+        name: project.name,
+        tasks: project.tasks.map((task, taskIndex) => ({
+          id: `${projectId}-task-${taskIndex + 1}`,
+          text: task.entry.trim(),
+          type: task.taskType.trim().toLowerCase(),
+          notes: task.notes.trim(),
+          agentEligible: task.aiWorkflow,
+          done: false
+        }))
+      };
+    });
 
     const activeProjectId = workspaceProjects[0].id;
     return normalizeWorkspace({

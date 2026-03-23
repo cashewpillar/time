@@ -19,7 +19,15 @@ export type NotionSelectOptions = {
   taskTypes: string[];
   workspaces: Array<{
     name: string;
-    projects: string[];
+    projects: Array<{
+      name: string;
+      tasks: Array<{
+        entry: string;
+        taskType: string;
+        notes: string;
+        aiWorkflow: boolean;
+      }>;
+    }>;
   }>;
 };
 

@@ -311,8 +311,11 @@ function App() {
                   <div key={workspace.name} className="notion-options-group">
                     <div className="notion-options-label">{workspace.name}</div>
                     <div className="notion-chip-list">
-                      {workspace.projects.length ? workspace.projects.map((value) => (
-                        <span key={`${workspace.name}-${value}`} className="notion-chip">{value}</span>
+                      {workspace.projects.length ? workspace.projects.map((project) => (
+                        <span key={`${workspace.name}-${project.name}`} className="notion-chip">
+                          {project.name}
+                          {project.tasks.length ? ` (${project.tasks.length})` : ""}
+                        </span>
                       )) : <span className="notion-helper">No projects found for this workspace.</span>}
                     </div>
                   </div>
