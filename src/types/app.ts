@@ -54,6 +54,7 @@ export type PersistedState = Partial<AppState> & {
 
 export type NotionConfig = {
   databaseId: string;
+  ownerToken: string;
 };
 
 export type NotionSyncPhase =

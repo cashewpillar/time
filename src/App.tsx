@@ -24,6 +24,7 @@ function App() {
   const previousCompletedSessionsRef = useRef(state.completedSessions);
   const [isNotionConfigOpen, setIsNotionConfigOpen] = useState(false);
   const [databaseIdDraft, setDatabaseIdDraft] = useState(notionConfig.databaseId);
+  const [ownerTokenDraft, setOwnerTokenDraft] = useState(notionConfig.ownerToken);
   const [isLoadingNotionOptions, setIsLoadingNotionOptions] = useState(false);
   const [notionOptionsError, setNotionOptionsError] = useState("");
   const [notionOptions, setNotionOptions] = useState<NotionSelectOptions>({
@@ -37,11 +38,12 @@ function App() {
   const editingTask = useMemo(() => getEditingTask(state), [state]);
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace), [activeWorkspace]);
   const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
-  const notionConfigured = Boolean(notionConfig.databaseId.trim());
+  const notionConfigured = Boolean(notionConfig.databaseId.trim() && notionConfig.ownerToken.trim());
 
   useEffect(() => {
     setDatabaseIdDraft(notionConfig.databaseId);
-  }, [notionConfig.databaseId]);
+    setOwnerTokenDraft(notionConfig.ownerToken);
+  }, [notionConfig.databaseId, notionConfig.ownerToken]);
 
   useEffect(() => {
     const workspaceName = activeWorkspace?.name || "Workspace";
@@ -180,14 +182,22 @@ function App() {
 
   function handleSaveNotionConfig() {
     updateNotionConfig({
-      databaseId: databaseIdDraft
+      databaseId: databaseIdDraft,
+      ownerToken: ownerTokenDraft
     });
   }
 
   async function handleFetchNotionOptions() {
     const trimmedDatabaseId = databaseIdDraft.trim();
+    const trimmedOwnerToken = ownerTokenDraft.trim();
     if (!trimmedDatabaseId) {
       setNotionOptionsError("Add a database ID first.");
+      setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
+      return;
+    }
+
+    if (!trimmedOwnerToken) {
+      setNotionOptionsError("Add your owner token first.");
       setNotionOptions({ taskTypes: [], tasks: [], epics: [] });
       return;
     }
@@ -196,7 +206,10 @@ function App() {
     setNotionOptionsError("");
 
     try {
-      const options = await fetchNotionSelectOptions({ databaseId: trimmedDatabaseId });
+      const options = await fetchNotionSelectOptions({
+        databaseId: trimmedDatabaseId,
+        ownerToken: trimmedOwnerToken
+      });
       setNotionOptions(options);
       dispatch({
         type: "import-notion-options",
@@ -251,8 +264,18 @@ function App() {
               />
             </label>
 
+            <label className="notion-field">
+              <span>Owner token</span>
+              <input
+                type="password"
+                placeholder="Paste your private sync token"
+                value={ownerTokenDraft}
+                onChange={(event) => setOwnerTokenDraft(event.target.value)}
+              />
+            </label>
+
             <button className="notion-save" type="button" onClick={handleSaveNotionConfig}>
-              Save database locally
+              Save Notion settings locally
             </button>
 
             <button className="notion-save notion-secondary" type="button" onClick={handleFetchNotionOptions} disabled={isLoadingNotionOptions}>

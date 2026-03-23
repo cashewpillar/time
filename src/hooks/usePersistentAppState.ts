@@ -53,6 +53,11 @@ export function usePersistentAppState(): PersistentAppStateResult {
         return;
       }
 
+      if (!notionConfig.ownerToken.trim()) {
+        setSyncStatus({ phase: "idle", message: "Owner token required for Notion sync." });
+        return;
+      }
+
       const requestId = loggingRequestIdRef.current + 1;
       loggingRequestIdRef.current = requestId;
       setSyncStatus({ phase: "saving", message: "Saving work entry to Notion..." });

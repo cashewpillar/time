@@ -22,7 +22,7 @@ export type NotionSelectOptions = {
 };
 
 function hasValidConfig(config: NotionConfig): boolean {
-  return Boolean(config.databaseId.trim());
+  return Boolean(config.databaseId.trim() && config.ownerToken.trim());
 }
 
 function chunkText(value: string): string[] {
@@ -48,6 +48,7 @@ async function notionFetch<T>(config: NotionConfig, path: string, init: RequestI
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "X-App-Token": config.ownerToken,
       ...(init.headers || {})
     }
   });
@@ -85,16 +86,18 @@ export function loadNotionConfig(): NotionConfig {
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null") as Partial<NotionConfig> | null;
     return {
-      databaseId: typeof saved?.databaseId === "string" ? saved.databaseId : ""
+      databaseId: typeof saved?.databaseId === "string" ? saved.databaseId : "",
+      ownerToken: typeof saved?.ownerToken === "string" ? saved.ownerToken : ""
     };
   } catch {
-    return { databaseId: "" };
+    return { databaseId: "", ownerToken: "" };
   }
 }
 
 export function saveNotionConfig(config: NotionConfig): NotionConfig {
   const nextConfig = {
-    databaseId: config.databaseId.trim()
+    databaseId: config.databaseId.trim(),
+    ownerToken: config.ownerToken.trim()
   };
 
   localStorage.setItem(CONFIG_KEY, JSON.stringify(nextConfig));
@@ -102,11 +105,15 @@ export function saveNotionConfig(config: NotionConfig): NotionConfig {
 }
 
 export function getNotionConnectionStatus(config: NotionConfig): NotionSyncStatus {
-  if (!hasValidConfig(config)) {
+  if (!config.databaseId.trim()) {
     return { phase: "idle", message: "Notion database not configured." };
   }
 
-  return { phase: "idle", message: "Notion database configured. Worker will handle auth." };
+  if (!config.ownerToken.trim()) {
+    return { phase: "idle", message: "Owner token required for Notion sync." };
+  }
+
+  return { phase: "idle", message: "Notion sync configured." };
 }
 
 export async function fetchNotionSelectOptions(config: NotionConfig): Promise<NotionSelectOptions> {

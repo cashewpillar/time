@@ -25,6 +25,11 @@ function isOriginAllowed(origin, env) {
   return Boolean(origin && allowedOrigins.includes(origin));
 }
 
+function hasValidOwnerToken(request, env) {
+  const appToken = request.headers.get("X-App-Token");
+  return Boolean(env.APP_WRITE_TOKEN && appToken && appToken === env.APP_WRITE_TOKEN);
+}
+
 function json(data, env, origin, init = {}) {
   const headers = {
     ...buildCorsHeaders(origin, env),
@@ -76,6 +81,10 @@ export default {
 
     if (!env.NOTION_API_KEY) {
       return json({ message: "Missing NOTION_API_KEY secret" }, env, origin, { status: 500 });
+    }
+
+    if (!hasValidOwnerToken(request, env)) {
+      return json({ message: "Invalid owner token" }, env, origin, { status: 403 });
     }
 
     try {
