@@ -20,7 +20,7 @@ class AppPage {
     await this.page.addInitScript(() => {
       localStorage.clear();
     });
-    await this.page.goto("/index.html");
+    await this.page.goto("/time/");
   }
 
   async openWorkspaceMenu() {

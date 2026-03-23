@@ -12,9 +12,9 @@ module.exports = defineConfig({
     video: "retain-on-failure"
   },
   webServer: {
-    command: "python3 -m http.server 4173",
+    command: "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",
     cwd: __dirname,
-    url: "http://127.0.0.1:4173/index.html",
+    url: "http://127.0.0.1:4173/time/",
     reuseExistingServer: true
   }
 });
