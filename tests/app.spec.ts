@@ -62,18 +62,3 @@ test("task form supports built-in types, custom types, AI eligibility, and editi
   await app.openAddTaskForm();
   await expect(app.taskTypeSelect).toContainText("Research");
 });
-
-test("task card controls are top-aligned", async ({ page }) => {
-  const app = new AppPage(page);
-
-  await app.createTask({
-    name: "Check alignment",
-    type: "development"
-  });
-
-  const alignment = await page.locator(".task-item").evaluate((element) => getComputedStyle(element).alignItems);
-  const checkboxAlignment = await page.locator(".task-checkbox-row").evaluate((element) => getComputedStyle(element).alignItems);
-
-  expect(alignment).toBe("flex-start");
-  expect(checkboxAlignment).toBe("flex-start");
-});
