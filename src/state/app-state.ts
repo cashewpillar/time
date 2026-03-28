@@ -59,7 +59,9 @@ export type AppAction =
   | { type: "toggle-task"; taskId: string }
   | { type: "delete-task"; taskId: string }
   | { type: "clear-completed" }
+  | { type: "clear-recent-task-slots" }
   | { type: "log-manual-entry"; slot: RecentTaskSlot; durationSeconds: number }
+  | { type: "restore-recent-task"; slot: RecentTaskSlot; now: number }
   | { type: "set-status"; status: string };
 
 export function defaultState(): AppState {
@@ -335,22 +337,27 @@ function normalizeRecentTaskSlots(input: unknown): RecentTaskSlot[] {
     .reduce<RecentTaskSlot[]>((slots, slot) => mergeRecentTaskSlot(slots, slot), []);
 }
 
-function isSameRecentTaskSlot(left: RecentTaskSlot, right: RecentTaskSlot): boolean {
-  return left.taskText === right.taskText
-    && left.taskType === right.taskType
-    && left.taskNotes === right.taskNotes
-    && left.agentEligible === right.agentEligible
-    && left.workspaceId === right.workspaceId
-    && left.projectId === right.projectId
-    && left.lastDurationSeconds === right.lastDurationSeconds;
+function isSameRecentTaskTitle(left: RecentTaskSlot, right: RecentTaskSlot): boolean {
+  return normalizeImportKey(left.taskText) === normalizeImportKey(right.taskText);
 }
 
 function mergeRecentTaskSlot(slots: RecentTaskSlot[], nextSlot: RecentTaskSlot | null): RecentTaskSlot[] {
   if (!nextSlot) return slots;
 
   const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
-  const remaining = slots.filter((slot) => slot.loggedAt >= cutoff && !isSameRecentTaskSlot(slot, nextSlot));
-  return [nextSlot, ...remaining].sort((left, right) => right.loggedAt - left.loggedAt);
+  const matchingSlot = slots.find((slot) => slot.loggedAt >= cutoff && isSameRecentTaskTitle(slot, nextSlot)) || null;
+  const mergedSlot: RecentTaskSlot = matchingSlot
+    ? {
+        ...matchingSlot,
+        ...nextSlot,
+        id: matchingSlot.id,
+        taskId: nextSlot.taskId ?? matchingSlot.taskId,
+        lastDurationSeconds: nextSlot.lastDurationSeconds ?? matchingSlot.lastDurationSeconds,
+        loggedAt: nextSlot.loggedAt
+      }
+    : nextSlot;
+  const remaining = slots.filter((slot) => slot.loggedAt >= cutoff && !isSameRecentTaskTitle(slot, mergedSlot));
+  return [mergedSlot, ...remaining].sort((left, right) => right.loggedAt - left.loggedAt);
 }
 
 function buildRecentTaskSlot(task: Task, workspace: Workspace, project: Project, loggedAt: number): RecentTaskSlot {
@@ -416,6 +423,12 @@ function updateActiveWorkspace(state: AppState, updater: (workspace: Workspace) 
   );
 }
 
+function updateWorkspaceById(state: AppState, workspaceId: string, updater: (workspace: Workspace) => Workspace): Workspace[] {
+  return state.workspaces.map((workspace) =>
+    workspace.id === workspaceId ? updater(workspace) : workspace
+  );
+}
+
 function withStatus(state: AppState, status: string): AppState {
   return { ...state, status };
 }
@@ -428,6 +441,30 @@ function toStableId(prefix: string, value: string, fallbackIndex: number): strin
     .replace(/(^-|-$)/g, "");
 
   return `${prefix}-${slug || fallbackIndex + 1}`;
+}
+
+function normalizeImportKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function hasSameTaskIdentity(left: Task, right: Task): boolean {
+  return normalizeImportKey(left.text) === normalizeImportKey(right.text)
+    && normalizeImportKey(left.type) === normalizeImportKey(right.type)
+    && left.notes.trim() === right.notes.trim()
+    && left.agentEligible === right.agentEligible;
+}
+
+function ensureUniqueTaskId(tasks: Task[], preferredId: string): string {
+  if (!tasks.some((task) => task.id === preferredId)) {
+    return preferredId;
+  }
+
+  let index = 2;
+  while (tasks.some((task) => task.id === `${preferredId}-${index}`)) {
+    index += 1;
+  }
+
+  return `${preferredId}-${index}`;
 }
 
 function dedupeImportedTasks(tasks: Array<{
@@ -516,6 +553,47 @@ function buildWorkspaceImports(workspaces: Array<{
   });
 }
 
+function findImportedSelection(
+  currentWorkspace: Workspace | null,
+  currentProject: Project | null,
+  currentTask: Task | null,
+  importedWorkspaces: Workspace[]
+): { workspaces: Workspace[]; workspaceId: string | null; taskId: string | null } {
+  const matchedWorkspace = currentWorkspace
+    ? importedWorkspaces.find((workspace) => normalizeImportKey(workspace.name) === normalizeImportKey(currentWorkspace.name)) || null
+    : null;
+
+  if (!matchedWorkspace) {
+    return {
+      workspaces: importedWorkspaces,
+      workspaceId: importedWorkspaces[0]?.id || null,
+      taskId: null
+    };
+  }
+
+  const matchedProject = currentProject
+    ? matchedWorkspace.projects.find((project) => normalizeImportKey(project.name) === normalizeImportKey(currentProject.name)) || null
+    : null;
+
+  const workspaceWithProject = matchedProject
+    ? setActiveProjectOnWorkspace(matchedWorkspace, matchedProject.id)
+    : matchedWorkspace;
+
+  const nextWorkspaces = importedWorkspaces.map((workspace) =>
+    workspace.id === workspaceWithProject.id ? workspaceWithProject : workspace
+  );
+
+  const matchedTask = currentTask && matchedProject
+    ? matchedProject.tasks.find((task) => hasSameTaskIdentity(task, currentTask)) || null
+    : null;
+
+  return {
+    workspaces: nextWorkspaces,
+    workspaceId: workspaceWithProject.id,
+    taskId: matchedTask?.id || null
+  };
+}
+
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "hydrate-state": {
@@ -558,13 +636,17 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const normalizedTaskTypes = action.taskTypes
         .map((value) => value.trim().toLowerCase())
         .filter(Boolean);
-      const nextWorkspaces = buildWorkspaceImports(action.workspaces);
+      const currentWorkspace = getActiveWorkspace(state);
+      const currentProject = getActiveProject(state);
+      const currentTask = getSelectedTask(state);
+      const importedWorkspaces = buildWorkspaceImports(action.workspaces);
+      const preservedSelection = findImportedSelection(currentWorkspace, currentProject, currentTask, importedWorkspaces);
 
       return normalizeState({
         ...state,
-        workspaces: nextWorkspaces,
-        activeWorkspaceId: nextWorkspaces[0]?.id || state.activeWorkspaceId,
-        activeTaskId: null,
+        workspaces: preservedSelection.workspaces,
+        activeWorkspaceId: preservedSelection.workspaceId || state.activeWorkspaceId,
+        activeTaskId: preservedSelection.taskId,
         customTaskTypes: Array.from(new Set([...state.customTaskTypes, ...normalizedTaskTypes])).sort(),
         isWorkspaceMenuOpen: false,
         isProjectMenuOpen: false,
@@ -909,6 +991,61 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         recentTaskSlots: mergeRecentTaskSlot(state.recentTaskSlots, action.slot),
         status: `Logged ${formatManualDuration(action.durationSeconds)} for ${action.slot.taskText}.`
       };
+    case "clear-recent-task-slots":
+      return {
+        ...state,
+        recentTaskSlots: [],
+        status: "Recent task slots cleared."
+      };
+    case "restore-recent-task": {
+      const targetWorkspace = state.workspaces.find((workspace) => workspace.id === action.slot.workspaceId) || null;
+      const targetProject = targetWorkspace?.projects.find((project) => project.id === action.slot.projectId) || null;
+      if (!targetWorkspace || !targetProject) {
+        return withStatus(state, "The original workspace or project is no longer available.");
+      }
+
+      const restoredTaskId = `task-${action.now}`;
+      const restoredTask: Task = {
+        id: restoredTaskId,
+        text: action.slot.taskText,
+        type: action.slot.taskType,
+        notes: action.slot.taskNotes,
+        agentEligible: action.slot.agentEligible,
+        done: false
+      };
+
+      const nextWorkspaces = updateWorkspaceById(state, targetWorkspace.id, (workspace) => {
+        const workspaceWithTask = {
+          ...workspace,
+          projects: workspace.projects.map((project) =>
+            project.id === targetProject.id
+              ? {
+                  ...project,
+                  tasks: [...project.tasks, restoredTask]
+                }
+              : project
+          )
+        };
+
+        return setActiveProjectOnWorkspace(workspaceWithTask, targetProject.id);
+      });
+
+      return normalizeState({
+        ...state,
+        workspaces: nextWorkspaces,
+        activeWorkspaceId: targetWorkspace.id,
+        activeTaskId: restoredTaskId,
+        recentTaskSlots: state.recentTaskSlots.map((slot) =>
+          slot.id === action.slot.id
+            ? {
+                ...slot,
+                taskId: restoredTaskId
+              }
+            : slot
+        ),
+        status: "Task restored from recent activity."
+      });
+    }
     default:
       return state;
   }

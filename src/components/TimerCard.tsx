@@ -34,6 +34,7 @@ type TimerCardProps = {
   onCommitTarget: (value: string) => boolean;
   onPreviewManualDuration: (durationSeconds: number) => void;
   onSelectRecentSlot: (slot: RecentTaskSlot) => void;
+  onClearRecentSlots: () => void;
   onManualLog: (durationSeconds: number, slotId: string | null) => Promise<boolean>;
 };
 
@@ -51,6 +52,7 @@ export function TimerCard({
   onCommitTarget,
   onPreviewManualDuration,
   onSelectRecentSlot,
+  onClearRecentSlots,
   onManualLog
 }: TimerCardProps) {
   const dragStateRef = useRef<{ element: HTMLDivElement; startX: number; startScrollLeft: number; didDrag: boolean } | null>(null);
@@ -574,7 +576,12 @@ export function TimerCard({
 
           {recentTaskSlots.length ? (
             <div className="manual-slot-group">
-              <div className="manual-slot-heading">Recent slots from the last 3 days</div>
+              <div className="manual-slot-heading-row">
+                <div className="manual-slot-heading">Recent slots from the last 3 days</div>
+                <button className="manual-slot-clear-btn" type="button" onClick={onClearRecentSlots}>
+                  Clear
+                </button>
+              </div>
               <div
                 className={`manual-slot-scroll${recentSlotFade.showStart ? " fade-start" : ""}${recentSlotFade.showEnd ? " fade-end" : ""}`}
               >

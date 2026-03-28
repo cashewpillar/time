@@ -5,6 +5,51 @@
 }
 
 :root {
+  --bg: #18243a;
+  --bg-top: #18243a;
+  --panel: #6d88ae;
+  --panel-strong: #324867;
+  --panel-muted: #57739a;
+  --surface: #476384;
+  --surface-strong: #29415f;
+  --line: rgba(235, 242, 255, 0.36);
+  --text: #f7f9ff;
+  --text-soft: rgba(247, 249, 255, 0.82);
+  --text-faint: rgba(247, 249, 255, 0.58);
+  --white: #ffffff;
+  --button-text: #344f74;
+  --shadow: 0 12px 24px rgba(10, 20, 38, 0.18);
+  --shadow-strong: 0 20px 40px rgba(8, 16, 31, 0.28);
+  --overlay-weak: rgba(247, 249, 255, 0.1);
+  --overlay-medium: rgba(247, 249, 255, 0.14);
+  --overlay-strong: rgba(247, 249, 255, 0.18);
+  --field-fill: rgba(247, 249, 255, 0.09);
+  --field-fill-strong: rgba(247, 249, 255, 0.12);
+  --field-fill-active: rgba(36, 58, 92, 0.78);
+  --outline-soft: rgba(247, 249, 255, 0.28);
+  --outline-strong: rgba(247, 249, 255, 0.88);
+  --success: #cce7ff;
+  --danger: #ffd3d3;
+  --button-bg: #eef3ff;
+  --button-bg-hover: #f7f9ff;
+  --button-bg-disabled: rgba(238, 243, 255, 0.56);
+  --button-text-disabled: rgba(52, 79, 116, 0.68);
+  --primary-button-text: #344f74;
+  --button-shadow: 0 10px 0 rgba(18, 33, 59, 0.14), 0 16px 28px rgba(8, 16, 31, 0.18);
+  --button-shadow-hover: 0 11px 0 rgba(18, 33, 59, 0.16), 0 18px 30px rgba(8, 16, 31, 0.2);
+  --backdrop: rgba(8, 16, 31, 0.74);
+  --fade-solid: rgba(109, 136, 174, 0.98);
+  --header-title: #ffffff;
+  --header-action-bg: rgba(247, 249, 255, 0.14);
+  --header-action-text: #ffffff;
+  --radius-xl: 20px;
+  --radius-lg: 16px;
+  --radius-md: 12px;
+  --font-ui: "Nunito", sans-serif;
+  --font-display: "Baloo 2", cursive;
+}
+
+:root[data-theme="green"] {
   --bg: #2f5540;
   --bg-top: #2f5540;
   --panel: #6b9770;
@@ -19,11 +64,69 @@
   --white: #ffffff;
   --button-text: #4b7454;
   --shadow: 0 12px 24px rgba(26, 48, 35, 0.14);
-  --radius-xl: 20px;
-  --radius-lg: 16px;
-  --radius-md: 12px;
-  --font-ui: "Nunito", sans-serif;
-  --font-display: "Baloo 2", cursive;
+  --shadow-strong: 0 20px 40px rgba(23, 41, 28, 0.26);
+  --overlay-weak: rgba(255, 253, 248, 0.1);
+  --overlay-medium: rgba(255, 253, 248, 0.14);
+  --overlay-strong: rgba(255, 253, 248, 0.18);
+  --field-fill: rgba(255, 253, 248, 0.09);
+  --field-fill-strong: rgba(255, 253, 248, 0.12);
+  --field-fill-active: rgba(53, 82, 61, 0.48);
+  --outline-soft: rgba(255, 253, 248, 0.28);
+  --outline-strong: rgba(255, 253, 248, 0.88);
+  --success: #d9f3c8;
+  --danger: #ffd3d3;
+  --button-bg: #f6f3ea;
+  --button-bg-hover: #fffdf8;
+  --button-bg-disabled: rgba(246, 243, 234, 0.56);
+  --button-text-disabled: rgba(75, 116, 84, 0.68);
+  --primary-button-text: #4b7454;
+  --button-shadow: 0 10px 0 rgba(33, 58, 45, 0.12), 0 16px 28px rgba(23, 41, 28, 0.16);
+  --button-shadow-hover: 0 11px 0 rgba(33, 58, 45, 0.14), 0 18px 30px rgba(23, 41, 28, 0.18);
+  --backdrop: rgba(26, 48, 35, 0.7);
+  --fade-solid: rgba(107, 151, 112, 0.98);
+  --header-title: #ffffff;
+  --header-action-bg: rgba(255, 253, 248, 0.14);
+  --header-action-text: #ffffff;
+}
+
+:root[data-theme="sakura"] {
+  --bg: #f8e8ee;
+  --bg-top: #f8e8ee;
+  --panel: #f3c7d5;
+  --panel-strong: #efb8ca;
+  --panel-muted: #e8a8bd;
+  --surface: #f6d4df;
+  --surface-strong: #e7a7bb;
+  --line: rgba(132, 79, 103, 0.24);
+  --text: #7a4760;
+  --text-soft: rgba(122, 71, 96, 0.82);
+  --text-faint: rgba(122, 71, 96, 0.6);
+  --white: #fffafd;
+  --button-text: #8a4e66;
+  --shadow: 0 12px 24px rgba(134, 78, 102, 0.14);
+  --shadow-strong: 0 20px 40px rgba(134, 78, 102, 0.18);
+  --overlay-weak: rgba(138, 78, 102, 0.08);
+  --overlay-medium: rgba(138, 78, 102, 0.12);
+  --overlay-strong: rgba(138, 78, 102, 0.18);
+  --field-fill: rgba(138, 78, 102, 0.08);
+  --field-fill-strong: rgba(138, 78, 102, 0.12);
+  --field-fill-active: rgba(213, 134, 161, 0.42);
+  --outline-soft: rgba(138, 78, 102, 0.2);
+  --outline-strong: rgba(138, 78, 102, 0.72);
+  --success: #c0678e;
+  --danger: #d86a7f;
+  --button-bg: #8f536c;
+  --button-bg-hover: #9b5f78;
+  --button-bg-disabled: rgba(143, 83, 108, 0.36);
+  --button-text-disabled: rgba(122, 71, 96, 0.52);
+  --primary-button-text: #fff8fb;
+  --button-shadow: 0 10px 0 rgba(134, 78, 102, 0.1), 0 16px 28px rgba(134, 78, 102, 0.14);
+  --button-shadow-hover: 0 11px 0 rgba(134, 78, 102, 0.12), 0 18px 30px rgba(134, 78, 102, 0.16);
+  --backdrop: rgba(122, 71, 96, 0.36);
+  --fade-solid: rgba(243, 199, 213, 0.98);
+  --header-title: #7a4760;
+  --header-action-bg: #ddb9c8;
+  --header-action-text: #7a4760;
 }
 
 html,
@@ -57,6 +160,47 @@ button {
   padding: 10px 16px 28px;
 }
 
+.theme-switcher {
+  width: min(100%, 640px);
+  margin: 18px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-soft);
+}
+
+.theme-switcher-label {
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.theme-switcher-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--overlay-weak);
+}
+
+.theme-option {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.theme-option.active {
+  background: var(--overlay-strong);
+  color: var(--white);
+}
+
 .topbar {
   position: relative;
   padding: 2px 2px 14px;
@@ -85,25 +229,30 @@ button {
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--overlay-medium);
 }
 
 .sync-dot.connected {
-  background: #d9f3c8;
+  background: var(--success);
 }
 
 .sync-toggle,
 .notion-save {
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.16);
+  background: var(--overlay-medium);
   color: var(--white);
   padding: 8px 12px;
   font-size: 0.74rem;
   font-weight: 800;
 }
 
+.sync-toggle {
+  background: var(--header-action-bg);
+  color: var(--header-action-text);
+}
+
 .notion-secondary {
-  background: rgba(255, 253, 248, 0.1);
+  background: var(--overlay-weak);
 }
 
 .notion-save:disabled {
@@ -112,13 +261,68 @@ button {
 }
 
 .notion-panel {
-  margin-top: 14px;
   display: grid;
   gap: 12px;
-  width: min(100%, 520px);
+  width: 100%;
+}
+
+.notion-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.notion-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+}
+
+.notion-modal-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 560px);
+  max-height: min(84vh, 760px);
+  overflow: auto;
+  display: grid;
+  gap: 14px;
   padding: 16px;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   background: var(--panel-strong);
+  box-shadow: var(--shadow-strong);
+}
+
+.notion-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notion-modal-title {
+  color: var(--white);
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.notion-modal-subtitle {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.notion-modal-close {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: var(--overlay-medium);
+  color: var(--white);
+  font-size: 0.92rem;
 }
 
 .notion-field {
@@ -137,7 +341,7 @@ button {
 .notion-field input {
   border: 0;
   border-radius: 12px;
-  background: rgba(255, 253, 248, 0.09);
+  background: var(--field-fill);
   color: var(--white);
   padding: 12px 14px;
 }
@@ -176,7 +380,7 @@ button {
   min-height: 34px;
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   color: var(--white);
   font-size: 0.88rem;
   font-weight: 700;
@@ -188,7 +392,7 @@ button {
 }
 
 .notion-helper.error {
-  color: #ffd3d3;
+  color: var(--danger);
 }
 
 .workspace-trigger {
@@ -196,7 +400,7 @@ button {
   align-items: center;
   gap: 10px;
   background: transparent;
-  color: var(--white);
+  color: var(--header-title);
   padding: 0;
   font-size: clamp(1.7rem, 5vw, 2.15rem);
   font-weight: 700;
@@ -219,7 +423,7 @@ button {
   max-width: min(92vw, 320px);
   border-radius: 16px;
   background: var(--panel-strong);
-  box-shadow: 0 20px 40px rgba(23, 41, 28, 0.26);
+  box-shadow: var(--shadow-strong);
   padding: 10px;
   display: none;
 }
@@ -266,7 +470,7 @@ button {
 .dropdown-item:hover,
 .dropdown-action:hover,
 .dropdown-icon:hover {
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
 }
 
 .dropdown-item-name {
@@ -283,14 +487,14 @@ button {
   flex-shrink: 0;
   border-radius: 10px;
   background: transparent;
-  color: rgba(238, 245, 255, 0.86);
+  color: var(--text-soft);
   font-size: 1rem;
 }
 
 .dropdown-action {
   width: 100%;
   border-radius: 12px;
-  background: rgba(255, 253, 248, 0.12);
+  background: var(--overlay-weak);
   color: var(--white);
   padding: 12px;
   font-size: 0.94rem;
@@ -300,7 +504,7 @@ button {
 
 .dropdown-divider {
   height: 1px;
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   margin: 8px 0;
 }
 
@@ -369,7 +573,7 @@ button {
 .project-tab:hover,
 .project-menu-trigger:hover,
 .add-task-tile:hover {
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
 }
 
 .project-menu-trigger {
@@ -416,13 +620,13 @@ button {
 .timer-preset-scroll.fade-start::before {
   opacity: 1;
   left: 0;
-  background: linear-gradient(90deg, rgba(107, 151, 112, 0.98), rgba(107, 151, 112, 0));
+  background: linear-gradient(90deg, var(--fade-solid), transparent);
 }
 
 .timer-preset-scroll.fade-end::after {
   opacity: 1;
   right: 0;
-  background: linear-gradient(90deg, rgba(107, 151, 112, 0), rgba(107, 151, 112, 0.98));
+  background: linear-gradient(90deg, transparent, var(--fade-solid));
 }
 
 .timer-preset-list {
@@ -462,7 +666,7 @@ button {
   padding: 0 16px;
   border-radius: 999px;
   border: 0;
-  background: rgba(255, 253, 248, 0.12);
+  background: var(--field-fill-strong);
   color: var(--white);
   font-size: 0.84rem;
   font-weight: 800;
@@ -476,7 +680,7 @@ button {
 }
 
 .timer-preset-chip-custom.active {
-  background: rgba(255, 253, 248, 0.12);
+  background: var(--field-fill-strong);
   box-shadow: none;
 }
 
@@ -484,7 +688,7 @@ button {
   width: 52px;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.12);
+  background: var(--field-fill-strong);
   color: var(--white);
   text-align: center;
   padding: 8px 10px;
@@ -507,12 +711,12 @@ button {
 .timer-preset-chip-custom input:focus-visible {
   outline: none;
   box-shadow: none;
-  background: rgba(53, 82, 61, 0.48);
+  background: var(--field-fill-active);
 }
 
 .timer-preset-chip.active {
-  background: rgba(255, 253, 248, 0.2);
-  box-shadow: inset 0 0 0 1px rgba(255, 253, 248, 0.28);
+  background: var(--overlay-strong);
+  box-shadow: inset 0 0 0 1px var(--outline-soft);
 }
 
 .timer-focus-banner {
@@ -555,7 +759,7 @@ button {
   margin: 0 auto 10px;
   padding: 4px;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.1);
+  background: var(--overlay-weak);
 }
 
 .timer-view-chip {
@@ -568,7 +772,7 @@ button {
 }
 
 .timer-view-chip.active {
-  background: rgba(255, 253, 248, 0.18);
+  background: var(--overlay-strong);
   color: var(--white);
 }
 
@@ -620,6 +824,25 @@ button {
   text-align: left;
 }
 
+.manual-slot-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.manual-slot-clear-btn {
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--overlay-medium);
+  color: var(--white);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .manual-slot-group {
   display: grid;
   gap: 8px;
@@ -646,13 +869,13 @@ button {
 .manual-slot-scroll.fade-start::before {
   opacity: 1;
   left: 0;
-  background: linear-gradient(90deg, rgba(107, 151, 112, 0.98), rgba(107, 151, 112, 0));
+  background: linear-gradient(90deg, var(--fade-solid), transparent);
 }
 
 .manual-slot-scroll.fade-end::after {
   opacity: 1;
   right: 0;
-  background: linear-gradient(90deg, rgba(107, 151, 112, 0), rgba(107, 151, 112, 0.98));
+  background: linear-gradient(90deg, transparent, var(--fade-solid));
 }
 
 .manual-slot-list {
@@ -685,7 +908,7 @@ button {
   min-width: min(100%, 220px);
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(255, 253, 248, 0.1);
+  background: var(--overlay-weak);
   color: var(--white);
   text-align: left;
   font-size: 0.84rem;
@@ -698,8 +921,8 @@ button {
 }
 
 .manual-slot-chip.active {
-  background: rgba(255, 253, 248, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(255, 253, 248, 0.28);
+  background: var(--overlay-strong);
+  box-shadow: inset 0 0 0 1px var(--outline-soft);
 }
 
 .manual-actions .primary-btn {
@@ -718,7 +941,7 @@ button {
 .mobile-timer-modal-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(26, 48, 35, 0.7);
+  background: var(--backdrop);
 }
 
 .mobile-timer-modal-card {
@@ -730,7 +953,7 @@ button {
   padding: 18px;
   border-radius: 20px;
   background: var(--panel-strong);
-  box-shadow: 0 20px 44px rgba(23, 41, 28, 0.26);
+  box-shadow: var(--shadow-strong);
 }
 
 .mobile-timer-note-title {
@@ -753,7 +976,7 @@ button {
   min-width: 88px;
   border-radius: 999px;
   padding: 10px 14px;
-  background: #f6f3ea;
+  background: var(--button-bg);
   color: var(--button-text);
   font-size: 0.82rem;
   font-weight: 800;
@@ -781,31 +1004,27 @@ button {
 .primary-btn {
   min-width: min(100%, 190px);
   border: 0;
-  background: #f6f3ea;
-  color: var(--button-text);
-  box-shadow:
-    0 10px 0 rgba(33, 58, 45, 0.12),
-    0 16px 28px rgba(23, 41, 28, 0.16);
+  background: var(--button-bg);
+  color: var(--primary-button-text);
+  box-shadow: var(--button-shadow);
 }
 
 .primary-btn:hover:not(:disabled) {
-  background: #fffdf8;
-  color: #446c4e;
-  box-shadow:
-    0 11px 0 rgba(33, 58, 45, 0.14),
-    0 18px 30px rgba(23, 41, 28, 0.18);
+  background: var(--button-bg-hover);
+  color: var(--primary-button-text);
+  box-shadow: var(--button-shadow-hover);
   transform: translateY(-1px);
 }
 
 .primary-btn:disabled {
-  background: rgba(246, 243, 234, 0.56);
-  color: rgba(75, 116, 84, 0.68);
+  background: var(--button-bg-disabled);
+  color: var(--button-text-disabled);
   box-shadow: none;
   cursor: not-allowed;
 }
 
 .ghost-btn {
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   color: var(--white);
   min-width: 96px;
 }
@@ -896,11 +1115,11 @@ button {
 }
 
 .task-item.editing {
-  background: #739f77;
+  background: var(--panel-muted);
 }
 
 .task-item.selected {
-  background: var(--panel);
+  background: var(--surface);
 }
 
 .primary-btn.idle-sheen,
@@ -921,7 +1140,7 @@ button {
 }
 
 .task-item.compact:hover {
-  box-shadow: 0 0 0 1px rgba(255, 253, 248, 0.16);
+  box-shadow: 0 0 0 1px var(--overlay-medium);
 }
 
 .task-toggle {
@@ -933,7 +1152,7 @@ button {
   background: transparent;
   color: transparent;
   flex-shrink: 0;
-  box-shadow: inset 0 0 0 2px rgba(255, 253, 248, 0.88);
+  box-shadow: inset 0 0 0 2px var(--outline-strong);
 }
 
 .task-item.done .task-toggle {
@@ -980,7 +1199,7 @@ button {
   height: 30px;
   margin-top: 2px;
   border-radius: 10px;
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   color: var(--white);
   font-size: 0.9rem;
   flex-shrink: 0;
@@ -997,7 +1216,7 @@ button {
   width: 30px;
   height: 30px;
   border-radius: 10px;
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   color: var(--white);
   font-size: 0.9rem;
   flex-shrink: 0;
@@ -1006,10 +1225,10 @@ button {
 .add-task-tile {
   width: 100%;
   min-height: 72px;
-  border: 3px dashed rgba(255, 253, 248, 0.24);
+  border: 3px dashed rgba(247, 249, 255, 0.24);
   border-radius: 18px;
   background: transparent;
-  color: rgba(255, 253, 248, 0.76);
+  color: rgba(247, 249, 255, 0.76);
   display: grid;
   place-items: center;
   font-size: 1.06rem;
@@ -1057,7 +1276,7 @@ button {
   width: 100%;
   border: 0;
   border-radius: 12px;
-  background: rgba(255, 253, 248, 0.12);
+  background: var(--field-fill-strong);
   color: var(--white);
   padding: 12px 14px;
   font-size: 0.98rem;
@@ -1065,7 +1284,7 @@ button {
 
 .task-input::placeholder,
 .task-input option {
-  color: rgba(238, 245, 255, 0.65);
+  color: var(--text-faint);
 }
 
 .task-notes {
@@ -1124,7 +1343,7 @@ button {
   min-height: 20px;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   color: var(--white);
   font-size: 0.66rem;
   font-weight: 800;
@@ -1151,7 +1370,7 @@ button {
 
 .task-input:focus-visible,
 .timer-config input:focus-visible {
-  outline: 2px solid rgba(255, 253, 248, 0.7);
+  outline: 2px solid rgba(247, 249, 255, 0.7);
   outline-offset: 1px;
 }
 
@@ -1169,7 +1388,7 @@ button {
 }
 
 .task-form-btn.ghost {
-  background: rgba(255, 253, 248, 0.14);
+  background: var(--overlay-medium);
   color: var(--white);
 }
 
@@ -1248,6 +1467,19 @@ button {
   .tasks-section {
     width: min(100%, 520px);
     margin-inline: auto;
+  }
+
+  .theme-switcher {
+    width: min(100%, 520px);
+    margin-top: 16px;
+  }
+
+  .notion-modal {
+    padding: 14px;
+  }
+
+  .notion-modal-card {
+    padding: 14px;
   }
 
   .timer-card {

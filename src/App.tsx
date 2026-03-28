@@ -18,6 +18,10 @@ import {
   getVisibleProjects
 } from "./state/app-state";
 
+const THEME_STORAGE_KEY = "time-theme";
+
+type ThemeName = "blue" | "green" | "sakura";
+
 function App() {
   const { state, dispatch, notionConfig, updateNotionConfig, syncStatus, logTaskEntry } = usePersistentAppState();
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
@@ -36,6 +40,12 @@ function App() {
   const [isTaskQueueExpanded, setIsTaskQueueExpanded] = useState(false);
   const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
   const [isDesktopLayout, setIsDesktopLayout] = useState(false);
+  const [theme, setTheme] = useState<ThemeName>(() => {
+    if (typeof window === "undefined") return "blue";
+
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return savedTheme === "green" || savedTheme === "sakura" ? savedTheme : "blue";
+  });
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
@@ -62,6 +72,24 @@ function App() {
     setDatabaseIdDraft(notionConfig.databaseId);
     setOwnerTokenDraft(notionConfig.ownerToken);
   }, [notionConfig.databaseId, notionConfig.ownerToken]);
+
+  useEffect(() => {
+    if (!isNotionConfigOpen) return undefined;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsNotionConfigOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isNotionConfigOpen]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(min-width: 680px)");
@@ -328,7 +356,10 @@ function App() {
 
     if (matchedTask) {
       dispatch({ type: "select-task", taskId: matchedTask.id });
+      return;
     }
+
+    dispatch({ type: "restore-recent-task", slot, now: Date.now() });
   }
 
   function handleSaveNotionConfig() {
@@ -397,71 +428,10 @@ function App() {
             <span className={`sync-dot${notionConfigured && syncStatus.phase !== "error" ? " connected" : ""}`}></span>
             <span>{syncStatus.message}</span>
           </div>
-          <button className="sync-toggle" type="button" onClick={() => setIsNotionConfigOpen((open) => !open)}>
-            {isNotionConfigOpen ? "Hide Notion" : "Configure Notion"}
+          <button className="sync-toggle" type="button" onClick={() => setIsNotionConfigOpen(true)}>
+            Configure Notion
           </button>
         </div>
-
-        {isNotionConfigOpen ? (
-          <div className="notion-panel">
-            <label className="notion-field">
-              <span>Database ID</span>
-              <input
-                type="text"
-                placeholder="32-char database ID"
-                value={databaseIdDraft}
-                onChange={(event) => setDatabaseIdDraft(event.target.value)}
-              />
-            </label>
-
-            <label className="notion-field">
-              <span>Owner token</span>
-              <input
-                type="password"
-                placeholder="Paste your private sync token"
-                value={ownerTokenDraft}
-                onChange={(event) => setOwnerTokenDraft(event.target.value)}
-              />
-            </label>
-
-            <button className="notion-save" type="button" onClick={handleSaveNotionConfig}>
-              Save Notion settings locally
-            </button>
-
-            <button className="notion-save notion-secondary" type="button" onClick={handleFetchNotionOptions} disabled={isLoadingNotionOptions}>
-              {isLoadingNotionOptions ? "Importing..." : `Import recent entries (${RECENT_IMPORT_DAYS}d)`}
-            </button>
-
-            {notionOptionsError ? <div className="notion-helper error">{notionOptionsError}</div> : null}
-
-            {notionOptions.taskTypes.length || notionOptions.workspaces.length ? (
-              <div className="notion-options">
-                <div className="notion-options-group">
-                  <div className="notion-options-label">Task type</div>
-                  <div className="notion-chip-list">
-                    {notionOptions.taskTypes.length ? notionOptions.taskTypes.map((value) => (
-                      <span key={value} className="notion-chip">{value}</span>
-                    )) : <span className="notion-helper">No task type values found.</span>}
-                  </div>
-                </div>
-
-                {notionOptions.workspaces.map((workspace) => (
-                  <div key={workspace.name} className="notion-options-group">
-                    <div className="notion-options-label">{workspace.name}</div>
-                    <div className="notion-chip-list">
-                      {workspace.projects.length ? workspace.projects.map((project) => (
-                        <span key={`${workspace.name}-${project.name}`} className="notion-chip">
-                          {project.name}
-                          {project.tasks.length ? ` (${project.tasks.length})` : ""}
-                        </span>
-                      )) : <span className="notion-helper">No projects found for this workspace.</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
       </header>
 
       <main className="main">
@@ -519,10 +489,129 @@ function App() {
             onCommitTarget={handleCommitTarget}
             onPreviewManualDuration={handlePreviewManualDuration}
             onSelectRecentSlot={handleSelectRecentSlot}
+            onClearRecentSlots={() => dispatch({ type: "clear-recent-task-slots" })}
             onManualLog={handleManualLog}
           />
         </section>
       </main>
+
+      <div className="theme-switcher" aria-label="Color theme">
+        <span className="theme-switcher-label">Theme</span>
+        <div className="theme-switcher-options" role="group" aria-label="Choose color theme">
+          <button
+            className={`theme-option${theme === "green" ? " active" : ""}`}
+            type="button"
+            aria-pressed={theme === "green"}
+            onClick={() => setTheme("green")}
+          >
+            Forest
+          </button>
+          <button
+            className={`theme-option${theme === "blue" ? " active" : ""}`}
+            type="button"
+            aria-pressed={theme === "blue"}
+            onClick={() => setTheme("blue")}
+          >
+            Midnight
+          </button>
+          <button
+            className={`theme-option${theme === "sakura" ? " active" : ""}`}
+            type="button"
+            aria-pressed={theme === "sakura"}
+            onClick={() => setTheme("sakura")}
+          >
+            Sakura
+          </button>
+        </div>
+      </div>
+
+      {isNotionConfigOpen ? (
+        <div className="notion-modal" role="dialog" aria-modal="true" aria-labelledby="notionModalTitle">
+          <button
+            className="notion-modal-backdrop"
+            type="button"
+            aria-label="Close Notion settings"
+            onClick={() => setIsNotionConfigOpen(false)}
+          ></button>
+
+          <div className="notion-modal-card">
+            <div className="notion-modal-header">
+              <div>
+                <div className="notion-modal-title" id="notionModalTitle">Notion Settings</div>
+                <div className="notion-modal-subtitle">Connect your local timer data and import recent options.</div>
+              </div>
+
+              <button
+                className="notion-modal-close"
+                type="button"
+                aria-label="Close Notion settings"
+                onClick={() => setIsNotionConfigOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="notion-panel">
+              <label className="notion-field">
+                <span>Database ID</span>
+                <input
+                  type="text"
+                  placeholder="32-char database ID"
+                  value={databaseIdDraft}
+                  onChange={(event) => setDatabaseIdDraft(event.target.value)}
+                />
+              </label>
+
+              <label className="notion-field">
+                <span>Owner token</span>
+                <input
+                  type="password"
+                  placeholder="Paste your private sync token"
+                  value={ownerTokenDraft}
+                  onChange={(event) => setOwnerTokenDraft(event.target.value)}
+                />
+              </label>
+
+              <button className="notion-save" type="button" onClick={handleSaveNotionConfig}>
+                Save Notion settings locally
+              </button>
+
+              <button className="notion-save notion-secondary" type="button" onClick={handleFetchNotionOptions} disabled={isLoadingNotionOptions}>
+                {isLoadingNotionOptions ? "Importing..." : `Import recent entries (${RECENT_IMPORT_DAYS}d)`}
+              </button>
+
+              {notionOptionsError ? <div className="notion-helper error">{notionOptionsError}</div> : null}
+
+              {notionOptions.taskTypes.length || notionOptions.workspaces.length ? (
+                <div className="notion-options">
+                  <div className="notion-options-group">
+                    <div className="notion-options-label">Task type</div>
+                    <div className="notion-chip-list">
+                      {notionOptions.taskTypes.length ? notionOptions.taskTypes.map((value) => (
+                        <span key={value} className="notion-chip">{value}</span>
+                      )) : <span className="notion-helper">No task type values found.</span>}
+                    </div>
+                  </div>
+
+                  {notionOptions.workspaces.map((workspace) => (
+                    <div key={workspace.name} className="notion-options-group">
+                      <div className="notion-options-label">{workspace.name}</div>
+                      <div className="notion-chip-list">
+                        {workspace.projects.length ? workspace.projects.map((project) => (
+                          <span key={`${workspace.name}-${project.name}`} className="notion-chip">
+                            {project.name}
+                            {project.tasks.length ? ` (${project.tasks.length})` : ""}
+                          </span>
+                        )) : <span className="notion-helper">No projects found for this workspace.</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
