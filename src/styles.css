@@ -400,6 +400,7 @@ button {
   overflow: hidden;
 }
 
+.timer-preset-scroll::before,
 .timer-preset-scroll::after {
   content: "";
   position: absolute;
@@ -408,9 +409,18 @@ button {
   width: 42px;
   pointer-events: none;
   z-index: 2;
+  opacity: 0;
+  transition: opacity 140ms ease;
 }
 
-.timer-preset-scroll::after {
+.timer-preset-scroll.fade-start::before {
+  opacity: 1;
+  left: 0;
+  background: linear-gradient(90deg, rgba(107, 151, 112, 0.98), rgba(107, 151, 112, 0));
+}
+
+.timer-preset-scroll.fade-end::after {
+  opacity: 1;
   right: 0;
   background: linear-gradient(90deg, rgba(107, 151, 112, 0), rgba(107, 151, 112, 0.98));
 }
@@ -461,7 +471,7 @@ button {
 .timer-preset-chip-custom {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding-right: 10px;
 }
 
@@ -471,7 +481,7 @@ button {
 }
 
 .timer-preset-chip-custom input {
-  width: 68px;
+  width: 52px;
   border: 0;
   border-radius: 999px;
   background: rgba(255, 253, 248, 0.12);
@@ -485,6 +495,12 @@ button {
 
 .timer-preset-chip-custom input::placeholder {
   color: var(--text-faint);
+}
+
+.timer-preset-chip-custom span {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  font-weight: 800;
 }
 
 .timer-preset-chip-custom input:focus,
@@ -614,6 +630,7 @@ button {
   overflow: hidden;
 }
 
+.manual-slot-scroll::before,
 .manual-slot-scroll::after {
   content: "";
   position: absolute;
@@ -622,9 +639,18 @@ button {
   width: 42px;
   pointer-events: none;
   z-index: 2;
+  opacity: 0;
+  transition: opacity 140ms ease;
 }
 
-.manual-slot-scroll::after {
+.manual-slot-scroll.fade-start::before {
+  opacity: 1;
+  left: 0;
+  background: linear-gradient(90deg, rgba(107, 151, 112, 0.98), rgba(107, 151, 112, 0));
+}
+
+.manual-slot-scroll.fade-end::after {
+  opacity: 1;
   right: 0;
   background: linear-gradient(90deg, rgba(107, 151, 112, 0), rgba(107, 151, 112, 0.98));
 }

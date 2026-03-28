@@ -107,10 +107,10 @@ test("manual log mode saves time against the selected task and caches it for reu
   await app.setManualPreset(10);
   await recentSlot.click();
   await expect(app.manualDurationPresets.getByRole("button", { name: "30m", exact: true })).toHaveClass(/active/);
-  await expect(page.locator(".manual-target-name")).toContainText("Mobile planning");
+  await expect(page.locator(".timer-focus-name")).toContainText("Mobile planning");
 
   await app.selectTask("Desk planning");
-  await expect(page.locator(".manual-target-name")).toContainText("Desk planning");
+  await expect(page.locator(".timer-focus-name")).toContainText("Desk planning");
 });
 
 test("clicking a recent slot syncs workspace, project, and selected task", async ({ page }) => {
@@ -142,7 +142,7 @@ test("clicking a recent slot syncs workspace, project, and selected task", async
   await expect(page.locator(".selected-task-panel .task-notes-copy")).toContainText("Sync me back");
 });
 
-test("notion import dedupes duplicate title-only tasks", async () => {
+test("notion import dedupes duplicate task titles", async () => {
   const nextState = appReducer(defaultState(), {
     type: "import-notion-options",
     taskTypes: [],
@@ -160,6 +160,6 @@ test("notion import dedupes duplicate title-only tasks", async () => {
   });
 
   const importedTasks = nextState.workspaces[0]?.projects[0]?.tasks ?? [];
-  expect(importedTasks).toHaveLength(2);
-  expect(importedTasks.map((task) => task.notes)).toEqual(["", "Has notes"]);
+  expect(importedTasks).toHaveLength(1);
+  expect(importedTasks[0]?.text).toBe("Same task");
 });

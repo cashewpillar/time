@@ -108,7 +108,7 @@ export function TaskList({
                   {task.agentEligible ? <span className="task-badge">AI Agent OK</span> : null}
                 </div>
               ) : null}
-              {isSelected && task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
+              {task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
             </>
           )}
         </div>

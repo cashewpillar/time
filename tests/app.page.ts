@@ -30,7 +30,8 @@ export class AppPage {
   readonly aiEligibleCheckbox: Locator;
   readonly timerModeLogTime: Locator;
   readonly timerModeLiveTimer: Locator;
-  readonly manualDurationInput: Locator;
+  readonly manualDurationHoursInput: Locator;
+  readonly manualDurationMinutesInput: Locator;
   readonly statusMessage: Locator;
   readonly timerTargetPresets: Locator;
   readonly manualDurationPresets: Locator;
@@ -50,7 +51,8 @@ export class AppPage {
     this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
     this.timerModeLiveTimer = page.getByRole("tab", { name: /live timer/i });
     this.timerModeLogTime = page.getByRole("tab", { name: /log time/i });
-    this.manualDurationInput = page.getByLabel("Manual duration (hours and minutes)");
+    this.manualDurationHoursInput = page.getByLabel("Manual duration hours");
+    this.manualDurationMinutesInput = page.getByLabel("Manual duration minutes");
     this.statusMessage = page.locator(".timer-status");
     this.timerTargetPresets = page.getByRole("group", { name: "Timer target presets" });
     this.manualDurationPresets = page.getByRole("group", { name: "Manual duration presets" });

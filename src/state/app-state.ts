@@ -441,20 +441,18 @@ function dedupeImportedTasks(tasks: Array<{
   notes: string;
   aiWorkflow: boolean;
 }> {
-  const seenTitleOnlyTasks = new Set<string>();
+  const seenTaskTitles = new Set<string>();
 
   return tasks.filter((task) => {
     const entry = task.entry.trim();
-    const notes = task.notes.trim();
     if (!entry) return false;
-    if (notes) return true;
 
     const normalizedEntry = entry.toLowerCase();
-    if (seenTitleOnlyTasks.has(normalizedEntry)) {
+    if (seenTaskTitles.has(normalizedEntry)) {
       return false;
     }
 
-    seenTitleOnlyTasks.add(normalizedEntry);
+    seenTaskTitles.add(normalizedEntry);
     return true;
   });
 }
