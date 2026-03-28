@@ -34,6 +34,7 @@ function App() {
   });
   const [isTaskQueueExpanded, setIsTaskQueueExpanded] = useState(false);
   const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
+  const [isDesktopLayout, setIsDesktopLayout] = useState(false);
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
@@ -54,6 +55,17 @@ function App() {
     setDatabaseIdDraft(notionConfig.databaseId);
     setOwnerTokenDraft(notionConfig.ownerToken);
   }, [notionConfig.databaseId, notionConfig.ownerToken]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 680px)");
+    const updateLayoutMode = () => {
+      setIsDesktopLayout(mediaQuery.matches);
+    };
+
+    updateLayoutMode();
+    mediaQuery.addEventListener("change", updateLayoutMode);
+    return () => mediaQuery.removeEventListener("change", updateLayoutMode);
+  }, []);
 
   useEffect(() => {
     const taskName = selectedTask?.text?.trim() || "No task selected";
@@ -359,7 +371,7 @@ function App() {
         <section
           className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}`}
           aria-labelledby="tasksHeading"
-          style={!shouldExpandTasksCard && collapsedTasksHeight ? { height: `${collapsedTasksHeight}px` } : undefined}
+          style={!shouldExpandTasksCard && isDesktopLayout && collapsedTasksHeight ? { height: `${collapsedTasksHeight}px` } : undefined}
         >
           <div ref={projectMenuRef}>
             <ProjectTabs
