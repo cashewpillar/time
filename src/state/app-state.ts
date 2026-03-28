@@ -946,7 +946,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         status: task?.done ? "Task marked active." : "Task completed."
       });
     }
-    case "delete-task":
+    case "delete-task": {
+      const deletedActiveTask = state.activeTaskId === action.taskId;
       return normalizeState({
         ...state,
         workspaces: updateActiveWorkspace(state, (workspace) => ({
@@ -960,9 +961,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
               : project
           )
         })),
-        activeTaskId: state.activeTaskId === action.taskId ? null : state.activeTaskId,
-        status: "Task deleted."
+        activeTaskId: deletedActiveTask ? null : state.activeTaskId,
+        isRunning: deletedActiveTask ? false : state.isRunning,
+        elapsedSeconds: deletedActiveTask ? 0 : state.elapsedSeconds,
+        lastTickAt: deletedActiveTask ? null : state.lastTickAt,
+        status: deletedActiveTask ? "Task deleted and timer reset." : "Task deleted."
       });
+    }
     case "clear-completed": {
       const activeProject = getActiveProject(state);
       if (!activeProject) return state;

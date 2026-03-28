@@ -139,6 +139,8 @@ export function TimerCard({
   }, [showCustomManualInput]);
 
   const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 ? "Start" : "Resume");
+  const startDisabled = !selectedTaskName && !isRunning;
+  const startTooltip = "Select a task before starting the timer.";
   const selectedRecentSlot = recentTaskSlots.find((slot) => slot.id === selectedManualSlotId) || null;
   const hasManualTarget = Boolean(selectedTaskName || selectedRecentSlot);
   const activeTimerPresetMinutes = targetSeconds % 60 === 0 ? targetSeconds / 60 : null;
@@ -391,7 +393,7 @@ export function TimerCard({
       ) : null}
 
       <div className="timer-focus-banner">
-        <div className="timer-focus-label">Now focusing</div>
+        <div className="timer-focus-label">{selectedTaskName ? "Now focusing" : "Not focusing"}</div>
         <div className="timer-focus-name">{selectedTaskName || "Pick a task to start"}</div>
         {selectedTaskContext ? <div className="timer-focus-context">{selectedTaskContext}</div> : null}
       </div>
@@ -415,7 +417,7 @@ export function TimerCard({
           aria-controls="timerViewPanel"
           onClick={() => setViewMode("manual")}
         >
-          Log time
+          Time logger
         </button>
       </div>
 
@@ -488,20 +490,29 @@ export function TimerCard({
             {formatTimerTime(elapsedSeconds)}
           </div>
 
-          <div className="timer-actions">
-            <button
-              className={`primary-btn${shouldHighlightStart ? " idle-sheen" : ""}`}
-              id="startPauseBtn"
-              type="button"
-              onClick={onToggleTimer}
-              disabled={!selectedTaskName && !isRunning}
-            >
-              {startPauseLabel}
-            </button>
-            <button className="ghost-btn" id="resetBtn" type="button" onClick={onReset}>
-              Reset
-            </button>
-          </div>
+      <div className="timer-actions">
+        <span className="button-tooltip-wrap" title={startDisabled ? startTooltip : undefined}>
+          <button
+            className={`primary-btn${shouldHighlightStart ? " idle-sheen" : ""}`}
+            id="startPauseBtn"
+            type="button"
+            onClick={onToggleTimer}
+            disabled={startDisabled}
+            aria-describedby={startDisabled ? "startButtonTooltip" : undefined}
+          >
+            {startPauseLabel}
+          </button>
+        </span>
+        <button className="ghost-btn" id="resetBtn" type="button" onClick={onReset}>
+          Reset
+        </button>
+      </div>
+
+      {startDisabled ? (
+        <div className="button-tooltip-note" id="startButtonTooltip" role="note">
+          {startTooltip}
+        </div>
+      ) : null}
         </div>
       ) : (
         <div className="manual-log-panel" id="timerViewPanel" role="tabpanel">

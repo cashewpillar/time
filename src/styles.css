@@ -794,6 +794,18 @@ button {
   flex-wrap: wrap;
 }
 
+.button-tooltip-wrap {
+  display: inline-flex;
+}
+
+.button-tooltip-note {
+  margin-top: 8px;
+  color: var(--text-faint);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
 .manual-log-panel {
   display: grid;
   gap: 10px;

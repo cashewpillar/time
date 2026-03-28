@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { playTimerRing } from "./lib/audio";
+import { playTimerRing, playTimerStart } from "./lib/audio";
 import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { parseTimerInput } from "./lib/time";
@@ -239,6 +239,7 @@ function App() {
       dispatch({ type: "pause-timer" });
     } else {
       void requestTimerNotificationPermission();
+      playTimerStart();
       dispatch({ type: "start-timer", now: Date.now() });
     }
   }
