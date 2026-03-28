@@ -93,6 +93,10 @@ test("manual log mode saves time against the selected task and caches it for reu
     type: "product",
     notes: "Capture time manually from phone."
   });
+  await app.createTask({
+    name: "Desk planning",
+    type: "design"
+  });
 
   await app.logManualTime("00:30");
 
@@ -103,6 +107,39 @@ test("manual log mode saves time against the selected task and caches it for reu
   await app.setManualPreset(10);
   await recentSlot.click();
   await expect(app.manualDurationPresets.getByRole("button", { name: "30m", exact: true })).toHaveClass(/active/);
+  await expect(page.locator(".manual-target-name")).toContainText("Mobile planning");
+
+  await app.selectTask("Desk planning");
+  await expect(page.locator(".manual-target-name")).toContainText("Desk planning");
+});
+
+test("clicking a recent slot syncs workspace, project, and selected task", async ({ page }) => {
+  const app = new AppPage(page);
+
+  await app.selectWorkspace("Workspace 1");
+  await app.selectProject("Project 1");
+  await app.createTask({
+    name: "Slot sync task",
+    type: "design",
+    notes: "Sync me back"
+  });
+  await app.logManualTime("00:15");
+
+  await app.selectWorkspace("Workspace 2");
+  await app.selectProject("Project 2");
+  await app.createTask({
+    name: "Other task",
+    type: "product"
+  });
+
+  await app.timerModeLogTime.click();
+  await app.recentSlot(/slot sync task workspace 1 \/ project 1 \/ 00:15/i).click();
+
+  await expect(app.workspaceTrigger).toHaveText(/workspace 1/i);
+  await expect(app.projectTabs.nth(0)).toHaveClass(/active/);
+  await expect(app.projectTabs.nth(0)).toHaveText(/project 1/i);
+  await expect(page.locator(".selected-task-panel .task-name")).toContainText("Slot sync task");
+  await expect(page.locator(".selected-task-panel .task-notes-copy")).toContainText("Sync me back");
 });
 
 test("notion import dedupes duplicate title-only tasks", async () => {

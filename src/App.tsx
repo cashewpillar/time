@@ -8,6 +8,7 @@ import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { usePersistentAppState } from "./hooks/usePersistentAppState";
+import type { RecentTaskSlot, Task } from "./types/app";
 import {
   getActiveProject,
   getSelectedTask,
@@ -299,6 +300,37 @@ function App() {
       .padStart(2, "0")}:${Math.floor((durationSeconds % 3600) / 60).toString().padStart(2, "0")}.` });
   }
 
+  function matchesRecentSlotTask(task: Task, slot: RecentTaskSlot): boolean {
+    return task.text.trim() === slot.taskText.trim()
+      && task.type.trim() === slot.taskType.trim()
+      && task.notes.trim() === slot.taskNotes.trim();
+  }
+
+  function handleSelectRecentSlot(slot: RecentTaskSlot) {
+    const targetWorkspace = state.workspaces.find((workspace) => workspace.id === slot.workspaceId) || null;
+    if (!targetWorkspace) return;
+
+    const targetProject = targetWorkspace.projects.find((project) => project.id === slot.projectId) || null;
+    if (!targetProject) return;
+
+    const matchedTask = targetProject.tasks.find((task) => task.id === slot.taskId)
+      || targetProject.tasks.find((task) => matchesRecentSlotTask(task, slot))
+      || targetProject.tasks.find((task) => task.text.trim() === slot.taskText.trim() && !task.notes.trim() && !slot.taskNotes.trim())
+      || null;
+
+    if (targetWorkspace.id !== state.activeWorkspaceId) {
+      dispatch({ type: "select-workspace", workspaceId: targetWorkspace.id });
+    }
+
+    if (targetProject.id !== targetWorkspace.activeProjectId || targetWorkspace.id !== state.activeWorkspaceId) {
+      dispatch({ type: "select-project", projectId: targetProject.id });
+    }
+
+    if (matchedTask) {
+      dispatch({ type: "select-task", taskId: matchedTask.id });
+    }
+  }
+
   function handleSaveNotionConfig() {
     updateNotionConfig({
       databaseId: databaseIdDraft,
@@ -486,6 +518,7 @@ function App() {
             onReset={() => dispatch({ type: "reset-timer" })}
             onCommitTarget={handleCommitTarget}
             onPreviewManualDuration={handlePreviewManualDuration}
+            onSelectRecentSlot={handleSelectRecentSlot}
             onManualLog={handleManualLog}
           />
         </section>

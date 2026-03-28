@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from "react";
 import {
   formatManualDuration,
   formatTimerTime,
@@ -10,6 +10,9 @@ import type { RecentTaskSlot } from "../types/app";
 
 const MOBILE_TIMER_NOTE_KEY = "time-mobile-timer-note-dismissed-v1";
 const TIMER_VIEW_MODE_KEY = "time-timer-view-mode-v1";
+const CUSTOM_TIMER_TARGET_KEY = "time-custom-timer-target-v1";
+const CUSTOM_MANUAL_DURATION_KEY = "time-custom-manual-duration-v1";
+const CUSTOM_MANUAL_OPEN_KEY = "time-custom-manual-open-v1";
 const DURATION_PRESETS_MINUTES = [10, 15, 20, 25, 30, 45];
 type TimerViewMode = "timer" | "manual";
 
@@ -26,6 +29,7 @@ type TimerCardProps = {
   onReset: () => void;
   onCommitTarget: (value: string) => boolean;
   onPreviewManualDuration: (durationSeconds: number) => void;
+  onSelectRecentSlot: (slot: RecentTaskSlot) => void;
   onManualLog: (durationSeconds: number, slotId: string | null) => Promise<boolean>;
 };
 
@@ -42,22 +46,32 @@ export function TimerCard({
   onReset,
   onCommitTarget,
   onPreviewManualDuration,
+  onSelectRecentSlot,
   onManualLog
 }: TimerCardProps) {
   const dragStateRef = useRef<{ element: HTMLDivElement; startX: number; startScrollLeft: number; didDrag: boolean } | null>(null);
   const suppressClickRef = useRef(false);
-  const [timerTargetDraft, setTimerTargetDraft] = useState(() => formatTimerTime(targetSeconds));
+  const [timerTargetDraft, setTimerTargetDraft] = useState(() => {
+    if (typeof window === "undefined") return formatTimerTime(targetSeconds);
+    return window.localStorage.getItem(CUSTOM_TIMER_TARGET_KEY) || formatTimerTime(targetSeconds);
+  });
   const [showMobileTimerNote, setShowMobileTimerNote] = useState(false);
   const [viewMode, setViewMode] = useState<TimerViewMode>(() => {
     if (typeof window === "undefined") return "timer";
     const saved = window.localStorage.getItem(TIMER_VIEW_MODE_KEY);
     return saved === "manual" ? "manual" : "timer";
   });
-  const [manualDurationDraft, setManualDurationDraft] = useState("00:30");
+  const [manualDurationDraft, setManualDurationDraft] = useState(() => {
+    if (typeof window === "undefined") return "00:30";
+    return window.localStorage.getItem(CUSTOM_MANUAL_DURATION_KEY) || "00:30";
+  });
   const [selectedManualSlotId, setSelectedManualSlotId] = useState<string | null>(null);
   const [isSubmittingManualLog, setIsSubmittingManualLog] = useState(false);
   const [showCustomTimerInput, setShowCustomTimerInput] = useState(() => !DURATION_PRESETS_MINUTES.includes(Math.round(targetSeconds / 60)));
-  const [showCustomManualInput, setShowCustomManualInput] = useState(false);
+  const [showCustomManualInput, setShowCustomManualInput] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(CUSTOM_MANUAL_OPEN_KEY) === "true";
+  });
 
   useEffect(() => {
     setTimerTargetDraft(formatTimerTime(targetSeconds));
@@ -81,9 +95,19 @@ export function TimerCard({
   }, [viewMode]);
 
   useEffect(() => {
-    if (!selectedTaskName || selectedManualSlotId !== null) return;
-    setSelectedManualSlotId(null);
-  }, [selectedManualSlotId, selectedTaskName]);
+    if (typeof window === "undefined" || !showCustomTimerInput) return;
+    window.localStorage.setItem(CUSTOM_TIMER_TARGET_KEY, timerTargetDraft);
+  }, [showCustomTimerInput, timerTargetDraft]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !showCustomManualInput) return;
+    window.localStorage.setItem(CUSTOM_MANUAL_DURATION_KEY, manualDurationDraft);
+  }, [manualDurationDraft, showCustomManualInput]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(CUSTOM_MANUAL_OPEN_KEY, String(showCustomManualInput));
+  }, [showCustomManualInput]);
 
   const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 ? "Start" : "Resume");
   const selectedRecentSlot = recentTaskSlots.find((slot) => slot.id === selectedManualSlotId) || null;
@@ -97,6 +121,15 @@ export function TimerCard({
   })();
 
   useEffect(() => {
+    if (!selectedRecentSlot) return;
+
+    const selectedRecentSlotContext = `${selectedRecentSlot.workspaceName} / ${selectedRecentSlot.projectName}`;
+    if (!selectedTaskName || selectedTaskName !== selectedRecentSlot.taskText || selectedTaskContext !== selectedRecentSlotContext) {
+      setSelectedManualSlotId(null);
+    }
+  }, [selectedRecentSlot, selectedTaskContext, selectedTaskName]);
+
+  useEffect(() => {
     if (typeof selectedRecentSlot?.lastDurationSeconds !== "number") return;
     setManualDurationDraft(formatManualDuration(selectedRecentSlot.lastDurationSeconds));
     setShowCustomManualInput(!DURATION_PRESETS_MINUTES.includes(Math.round(selectedRecentSlot.lastDurationSeconds / 60)));
@@ -104,6 +137,7 @@ export function TimerCard({
 
   function applyRecentSlot(slot: RecentTaskSlot) {
     setSelectedManualSlotId(slot.id);
+    onSelectRecentSlot(slot);
     if (typeof slot.lastDurationSeconds === "number") {
       setManualDurationDraft(formatManualDuration(slot.lastDurationSeconds));
       setShowCustomManualInput(!DURATION_PRESETS_MINUTES.includes(Math.round(slot.lastDurationSeconds / 60)));
@@ -133,6 +167,20 @@ export function TimerCard({
   function dismissMobileTimerNote() {
     window.localStorage.setItem(MOBILE_TIMER_NOTE_KEY, "true");
     setShowMobileTimerNote(false);
+  }
+
+  function openCustomTimerInput() {
+    if (typeof window !== "undefined") {
+      setTimerTargetDraft(window.localStorage.getItem(CUSTOM_TIMER_TARGET_KEY) || timerTargetDraft);
+    }
+    setShowCustomTimerInput(true);
+  }
+
+  function openCustomManualInput() {
+    if (typeof window !== "undefined") {
+      setManualDurationDraft(window.localStorage.getItem(CUSTOM_MANUAL_DURATION_KEY) || manualDurationDraft);
+    }
+    setShowCustomManualInput(true);
   }
 
   useEffect(() => {
@@ -187,6 +235,23 @@ export function TimerCard({
     suppressClickRef.current = false;
   }
 
+  function handleHorizontalWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    const element = event.currentTarget;
+    const canScrollHorizontally = element.scrollWidth > element.clientWidth;
+    if (!canScrollHorizontally) return;
+
+    const horizontalDelta = event.deltaX;
+    const verticalDelta = event.deltaY;
+    const intendedDelta = Math.abs(horizontalDelta) > 0 ? horizontalDelta : verticalDelta;
+    if (intendedDelta === 0) return;
+
+    element.scrollBy({
+      left: intendedDelta,
+      behavior: "smooth"
+    });
+    event.preventDefault();
+  }
+
   async function handleManualLogSubmit() {
     const parsed = parseManualDurationInput(manualDurationDraft);
     if (!parsed || parsed <= 0 || isSubmittingManualLog) return;
@@ -194,7 +259,7 @@ export function TimerCard({
     setIsSubmittingManualLog(true);
     try {
       const didSave = await onManualLog(parsed, selectedManualSlotId);
-      if (didSave) {
+      if (didSave && !showCustomManualInput) {
         setManualDurationDraft("00:30");
       }
     } finally {
@@ -231,6 +296,7 @@ export function TimerCard({
       <div className="timer-focus-banner">
         <div className="timer-focus-label">Now focusing</div>
         <div className="timer-focus-name">{selectedTaskName || "Pick a task to start"}</div>
+        {selectedTaskContext ? <div className="timer-focus-context">{selectedTaskContext}</div> : null}
       </div>
 
       <div className="timer-view-toggle" role="tablist" aria-label="Timer mode">
@@ -266,6 +332,7 @@ export function TimerCard({
                 role="group"
                 aria-label="Timer target presets"
                 onMouseDown={handleHorizontalDragStart}
+                onWheel={handleHorizontalWheel}
                 onClickCapture={handleHorizontalDragClickCapture}
               >
                 {DURATION_PRESETS_MINUTES.map((minutes) => (
@@ -287,6 +354,7 @@ export function TimerCard({
                       inputMode="numeric"
                       value={timerTargetDraft}
                       aria-label="Timer target"
+                      placeholder="00:00"
                       onChange={(event) => setTimerTargetDraft(event.target.value)}
                       onBlur={(event) => commitTarget(event.target.value)}
                       onKeyDown={(event) => {
@@ -302,7 +370,7 @@ export function TimerCard({
                   <button
                     className="timer-preset-chip"
                     type="button"
-                    onClick={() => setShowCustomTimerInput(true)}
+                    onClick={openCustomTimerInput}
                   >
                     Custom
                   </button>
@@ -341,6 +409,7 @@ export function TimerCard({
                 role="group"
                 aria-label="Manual duration presets"
                 onMouseDown={handleHorizontalDragStart}
+                onWheel={handleHorizontalWheel}
                 onClickCapture={handleHorizontalDragClickCapture}
               >
                 {DURATION_PRESETS_MINUTES.map((minutes) => (
@@ -362,6 +431,7 @@ export function TimerCard({
                       inputMode="numeric"
                       value={manualDurationDraft}
                       aria-label="Manual duration (hours and minutes)"
+                      placeholder="00:00"
                       onChange={(event) => setManualDurationDraft(event.target.value)}
                     />
                   </label>
@@ -369,23 +439,13 @@ export function TimerCard({
                   <button
                     className="timer-preset-chip"
                     type="button"
-                    onClick={() => setShowCustomManualInput(true)}
+                    onClick={openCustomManualInput}
                   >
                     Custom
                   </button>
                 )}
               </div>
             </div>
-          </div>
-
-          <div className="manual-target-card" aria-live="polite">
-            <div className="manual-target-label">Logging against</div>
-            <div className="manual-target-name">{manualTargetLabel}</div>
-            {selectedRecentSlot ? (
-              <div className="manual-target-meta">{selectedRecentSlot.workspaceName} / {selectedRecentSlot.projectName}</div>
-            ) : selectedTaskContext ? (
-              <div className="manual-target-meta">{selectedTaskContext}</div>
-            ) : null}
           </div>
 
           {recentTaskSlots.length ? (
@@ -395,6 +455,7 @@ export function TimerCard({
                 <div
                   className="manual-slot-list"
                   onMouseDown={handleHorizontalDragStart}
+                  onWheel={handleHorizontalWheel}
                   onClickCapture={handleHorizontalDragClickCapture}
                 >
                 {recentTaskSlots.map((slot) => (

@@ -92,6 +92,11 @@ export class AppPage {
     );
   }
 
+  async selectWorkspace(name: string): Promise<void> {
+    await this.openWorkspaceMenu();
+    await this.workspaceDropdown.getByRole("button", { name, exact: true }).click();
+  }
+
   async renameProject(currentName: string, nextName: string): Promise<void> {
     await this.openProjectMenu();
     await this.acceptPromptAndClick(
@@ -160,6 +165,10 @@ export class AppPage {
     await this.page.getByRole("button", { name: /save changes/i }).click();
   }
 
+  async selectTask(name: string): Promise<void> {
+    await this.page.locator(".task-copy").filter({ hasText: name }).first().click();
+  }
+
   async logManualTime(duration: string): Promise<void> {
     await this.timerModeLogTime.click();
     const [hours, minutes] = duration.split(":").map((part) => Number(part));
@@ -181,5 +190,9 @@ export class AppPage {
   async showCustomManualInput(): Promise<void> {
     await this.timerModeLogTime.click();
     await this.manualDurationPresets.getByRole("button", { name: "Custom", exact: true }).click();
+  }
+
+  recentSlot(name: RegExp): Locator {
+    return this.page.getByRole("button", { name });
   }
 }

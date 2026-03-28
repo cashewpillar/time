@@ -395,15 +395,6 @@ button {
   margin-bottom: 10px;
 }
 
-.timer-preset-heading {
-  color: var(--text-faint);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
 .timer-preset-scroll {
   position: relative;
   overflow: hidden;
@@ -436,6 +427,7 @@ button {
   touch-action: pan-x;
   cursor: grab;
   user-select: none;
+  scroll-behavior: smooth;
 }
 
 .timer-preset-list,
@@ -473,6 +465,11 @@ button {
   padding-right: 10px;
 }
 
+.timer-preset-chip-custom.active {
+  background: rgba(255, 253, 248, 0.12);
+  box-shadow: none;
+}
+
 .timer-preset-chip-custom input {
   width: 68px;
   border: 0;
@@ -482,10 +479,19 @@ button {
   text-align: center;
   padding: 8px 10px;
   font-weight: 800;
+  outline: none;
+  box-shadow: none;
 }
 
 .timer-preset-chip-custom input::placeholder {
   color: var(--text-faint);
+}
+
+.timer-preset-chip-custom input:focus,
+.timer-preset-chip-custom input:focus-visible {
+  outline: none;
+  box-shadow: none;
+  background: rgba(53, 82, 61, 0.48);
 }
 
 .timer-preset-chip.active {
@@ -516,6 +522,13 @@ button {
   font-weight: 800;
   line-height: 1.15;
   word-break: break-word;
+}
+
+.timer-focus-context {
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .timer-view-toggle {
@@ -578,17 +591,8 @@ button {
   justify-self: center;
 }
 
-.manual-target-card {
-  display: grid;
-  gap: 3px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 253, 248, 0.1);
-  text-align: center;
-}
-
-.manual-target-label,
-.manual-slot-heading {
+.manual-slot-heading,
+.timer-preset-heading {
   color: var(--text-faint);
   font-size: 0.72rem;
   font-weight: 800;
@@ -596,16 +600,8 @@ button {
   text-transform: uppercase;
 }
 
-.manual-target-name {
-  color: var(--white);
-  font-size: 1rem;
-  font-weight: 800;
-  word-break: break-word;
-}
-
-.manual-target-meta {
-  color: var(--text-soft);
-  font-size: 0.8rem;
+.manual-slot-heading {
+  text-align: left;
 }
 
 .manual-slot-group {
@@ -645,6 +641,7 @@ button {
   touch-action: pan-x;
   cursor: grab;
   user-select: none;
+  scroll-behavior: smooth;
 }
 
 .manual-slot-list::-webkit-scrollbar {
