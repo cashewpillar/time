@@ -510,6 +510,15 @@ button {
   flex-wrap: wrap;
 }
 
+.mobile-timer-note {
+  display: none;
+  margin: 14px 4px 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .primary-btn,
 .ghost-btn {
   border-radius: 8px;
@@ -1037,5 +1046,11 @@ button {
 
   .task-form-btn {
     min-width: 140px;
+  }
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 679px) {
+  .mobile-timer-note {
+    display: block;
   }
 }

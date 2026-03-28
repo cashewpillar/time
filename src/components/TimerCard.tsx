@@ -84,6 +84,10 @@ export function TimerCard({
           Reset
         </button>
       </div>
+
+      <p className="mobile-timer-note">
+        Mobile browsers may delay sounds and notifications after you lock your phone or switch tabs. The timer will catch up when the page wakes back up.
+      </p>
     </>
   );
 }

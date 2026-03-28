@@ -185,10 +185,11 @@ export function normalizeState(input?: PersistedState): AppState {
   next.activeTaskId = getDefaultActiveTaskId(getActiveProject(next), next.activeTaskId);
 
   if (next.isRunning && next.lastTickAt) {
-    const elapsedSinceLastTick = Math.floor((Date.now() - next.lastTickAt) / 1000);
+    const now = Date.now();
+    const elapsedSinceLastTick = Math.floor((now - next.lastTickAt) / 1000);
     if (elapsedSinceLastTick > 0) {
       next.elapsedSeconds = Math.min(next.targetSeconds, next.elapsedSeconds + elapsedSinceLastTick);
-      next.lastTickAt = Date.now();
+      next.lastTickAt += elapsedSinceLastTick * 1000;
     }
   }
 
@@ -625,7 +626,19 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       };
     case "tick": {
       if (!state.isRunning) return state;
-      const nextElapsed = state.elapsedSeconds + 1;
+      if (!state.lastTickAt) {
+        return {
+          ...state,
+          lastTickAt: action.now
+        };
+      }
+
+      const elapsedSinceLastTick = Math.floor((action.now - state.lastTickAt) / 1000);
+      if (elapsedSinceLastTick <= 0) {
+        return state;
+      }
+
+      const nextElapsed = state.elapsedSeconds + elapsedSinceLastTick;
       if (nextElapsed >= state.targetSeconds) {
         return {
           ...state,
@@ -639,7 +652,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return {
         ...state,
         elapsedSeconds: nextElapsed,
-        lastTickAt: action.now
+        lastTickAt: state.lastTickAt + elapsedSinceLastTick * 1000
       };
     }
     case "open-task-form":
