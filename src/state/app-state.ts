@@ -2,6 +2,7 @@ import type {
   AppState,
   PersistedProject,
   PersistedState,
+  RecentTaskSlot,
   PersistedTask,
   PersistedWorkspace,
   Project,
@@ -9,10 +10,12 @@ import type {
   TaskDraft,
   Workspace
 } from "../types/app";
+import { formatManualDuration } from "../lib/time";
 
 export const STORAGE_KEY = "workspace-two-state-v2";
 export const DEFAULT_TARGET_SECONDS = 20 * 60;
 export const DEFAULT_TASK_TYPES = ["development", "design", "product"] as const;
+export const RECENT_TASK_SLOT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 export type AppAction =
   | { type: "hydrate-state"; state: PersistedState; status?: string }
@@ -56,6 +59,7 @@ export type AppAction =
   | { type: "toggle-task"; taskId: string }
   | { type: "delete-task"; taskId: string }
   | { type: "clear-completed" }
+  | { type: "log-manual-entry"; slot: RecentTaskSlot; durationSeconds: number }
   | { type: "set-status"; status: string };
 
 export function defaultState(): AppState {
@@ -72,6 +76,7 @@ export function defaultState(): AppState {
     isWorkspaceMenuOpen: false,
     isProjectMenuOpen: false,
     customTaskTypes: [],
+    recentTaskSlots: [],
     status: "Projects, workspaces, and timer progress are saved on this device.",
     workspaces: [
       {
@@ -151,6 +156,7 @@ export function normalizeState(input?: PersistedState): AppState {
           .filter((type): type is string => typeof type === "string" && type.trim().length > 0)
           .map((type) => type.trim().toLowerCase())
       : base.customTaskTypes,
+    recentTaskSlots: normalizeRecentTaskSlots(input?.recentTaskSlots),
     workspaces: base.workspaces
   };
 
@@ -198,6 +204,10 @@ export function normalizeState(input?: PersistedState): AppState {
     next.isRunning = false;
     next.lastTickAt = null;
     next.completedSessions += 1;
+    next.recentTaskSlots = mergeRecentTaskSlot(
+      next.recentTaskSlots,
+      buildRecentTaskSlotFromState(next, Date.now())
+    );
     next.status = "Session complete. Nice work.";
   }
 
@@ -289,6 +299,83 @@ function cloneWorkspace(workspace: Workspace): Workspace {
       tasks: project.tasks.map((task) => ({ ...task }))
     }))
   };
+}
+
+function normalizeRecentTaskSlots(input: unknown): RecentTaskSlot[] {
+  const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .flatMap((slot, index) => {
+      if (!slot || typeof slot !== "object") return [];
+      const candidate = slot as Partial<RecentTaskSlot>;
+      if (typeof candidate.taskText !== "string" || !candidate.taskText.trim()) return [];
+      if (typeof candidate.workspaceId !== "string" || typeof candidate.projectId !== "string") return [];
+      if (typeof candidate.workspaceName !== "string" || typeof candidate.projectName !== "string") return [];
+      if (typeof candidate.loggedAt !== "number" || candidate.loggedAt < cutoff) return [];
+
+      return [{
+        id: typeof candidate.id === "string" ? candidate.id : `recent-task-slot-${index}-${candidate.loggedAt}`,
+        taskId: typeof candidate.taskId === "string" ? candidate.taskId : null,
+        taskText: candidate.taskText.trim(),
+        taskType: typeof candidate.taskType === "string" ? candidate.taskType.trim() : "",
+        taskNotes: typeof candidate.taskNotes === "string" ? candidate.taskNotes : "",
+        agentEligible: Boolean(candidate.agentEligible),
+        workspaceId: candidate.workspaceId,
+        workspaceName: candidate.workspaceName.trim(),
+        projectId: candidate.projectId,
+        projectName: candidate.projectName.trim(),
+        lastDurationSeconds: typeof candidate.lastDurationSeconds === "number" && candidate.lastDurationSeconds >= 0
+          ? candidate.lastDurationSeconds
+          : null,
+        loggedAt: candidate.loggedAt
+      }];
+    })
+    .sort((left, right) => right.loggedAt - left.loggedAt)
+    .reduce<RecentTaskSlot[]>((slots, slot) => mergeRecentTaskSlot(slots, slot), []);
+}
+
+function isSameRecentTaskSlot(left: RecentTaskSlot, right: RecentTaskSlot): boolean {
+  return left.taskText === right.taskText
+    && left.taskType === right.taskType
+    && left.taskNotes === right.taskNotes
+    && left.agentEligible === right.agentEligible
+    && left.workspaceId === right.workspaceId
+    && left.projectId === right.projectId
+    && left.lastDurationSeconds === right.lastDurationSeconds;
+}
+
+function mergeRecentTaskSlot(slots: RecentTaskSlot[], nextSlot: RecentTaskSlot | null): RecentTaskSlot[] {
+  if (!nextSlot) return slots;
+
+  const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
+  const remaining = slots.filter((slot) => slot.loggedAt >= cutoff && !isSameRecentTaskSlot(slot, nextSlot));
+  return [nextSlot, ...remaining].sort((left, right) => right.loggedAt - left.loggedAt);
+}
+
+function buildRecentTaskSlot(task: Task, workspace: Workspace, project: Project, loggedAt: number): RecentTaskSlot {
+  return {
+    id: `recent-task-slot-${loggedAt}`,
+    taskId: task.id,
+    taskText: task.text.trim(),
+    taskType: task.type.trim(),
+    taskNotes: task.notes,
+    agentEligible: task.agentEligible,
+    workspaceId: workspace.id,
+    workspaceName: workspace.name,
+    projectId: project.id,
+    projectName: project.name,
+    lastDurationSeconds: null,
+    loggedAt
+  };
+}
+
+function buildRecentTaskSlotFromState(state: AppState, loggedAt: number): RecentTaskSlot | null {
+  const workspace = getActiveWorkspace(state);
+  const project = getActiveProject(state);
+  const task = getSelectedTask(state);
+  if (!workspace || !project || !task) return null;
+  return buildRecentTaskSlot(task, workspace, project, loggedAt);
 }
 
 function setActiveProjectOnWorkspace(workspace: Workspace, projectId: string): Workspace {
@@ -640,12 +727,14 @@ export function appReducer(state: AppState, action: AppAction): AppState {
 
       const nextElapsed = state.elapsedSeconds + elapsedSinceLastTick;
       if (nextElapsed >= state.targetSeconds) {
+        const loggedAt = action.now;
         return {
           ...state,
           elapsedSeconds: state.targetSeconds,
           isRunning: false,
           lastTickAt: null,
           completedSessions: state.completedSessions + 1,
+          recentTaskSlots: mergeRecentTaskSlot(state.recentTaskSlots, buildRecentTaskSlotFromState(state, loggedAt)),
           status: "Session complete. Nice work."
         };
       }
@@ -786,6 +875,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         status: before === activeProject.tasks.length ? "No completed tasks to clear." : "Completed tasks cleared."
       });
     }
+    case "log-manual-entry":
+      return {
+        ...state,
+        recentTaskSlots: mergeRecentTaskSlot(state.recentTaskSlots, action.slot),
+        status: `Logged ${formatManualDuration(action.durationSeconds)} for ${action.slot.taskText}.`
+      };
     default:
       return state;
   }

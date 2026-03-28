@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { playTimerRing } from "./lib/audio";
 import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
-import { formatTime, parseTimeInput } from "./lib/time";
+import { parseTimerInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
 import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
@@ -46,6 +46,12 @@ function App() {
   const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
   const shouldExpandTasksCard = isTaskQueueExpanded || state.isTaskFormOpen;
   const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedTask);
+  const selectedTaskContext = selectedTask && activeWorkspace && activeProject
+    ? `${activeWorkspace.name} / ${activeProject.name}`
+    : null;
+  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current task|Session complete|Timer (started|paused|reset)|Timer target set)/.test(state.status)
+    ? state.status
+    : null;
 
   useLayoutEffect(() => {
     setIsTaskQueueExpanded(!(activeProject?.tasks.length));
@@ -189,7 +195,7 @@ function App() {
   }
 
   function handleCommitTarget(value: string): boolean {
-    const parsed = parseTimeInput(value);
+    const parsed = parseTimerInput(value);
     if (!parsed || parsed <= 0) {
       dispatch({ type: "set-status", status: "Use mm:ss format, for example 20:00." });
       return false;
@@ -232,6 +238,59 @@ function App() {
       customType,
       now
     });
+  }
+
+  async function handleManualLog(durationSeconds: number, slotId: string | null): Promise<boolean> {
+    const selectedRecentSlot = slotId
+      ? state.recentTaskSlots.find((slot) => slot.id === slotId) || null
+      : null;
+
+    const activeSlot = selectedRecentSlot || (selectedTask && activeWorkspace && activeProject
+      ? {
+          id: `recent-task-slot-${Date.now()}`,
+          taskId: selectedTask.id,
+          taskText: selectedTask.text.trim(),
+          taskType: selectedTask.type.trim(),
+          taskNotes: selectedTask.notes,
+          agentEligible: selectedTask.agentEligible,
+          workspaceId: activeWorkspace.id,
+          workspaceName: activeWorkspace.name,
+          projectId: activeProject.id,
+          projectName: activeProject.name,
+          lastDurationSeconds: null,
+          loggedAt: Date.now()
+        }
+      : null);
+
+    if (!activeSlot) {
+      dispatch({ type: "set-status", status: "Pick a current task or a recent slot first." });
+      return false;
+    }
+
+    const loggedAt = Date.now();
+    const nextSlot = {
+      ...activeSlot,
+      id: `recent-task-slot-${loggedAt}`,
+      lastDurationSeconds: durationSeconds,
+      loggedAt
+    };
+
+    dispatch({ type: "log-manual-entry", slot: nextSlot, durationSeconds });
+
+    if (notionConfig.databaseId.trim() && notionConfig.ownerToken.trim()) {
+      await logTaskEntry({
+        entry: nextSlot.taskText,
+        taskType: nextSlot.taskType,
+        task: nextSlot.projectName,
+        epic: nextSlot.workspaceName,
+        minutes: Math.max(1, Math.round(durationSeconds / 60)),
+        startDatetime: new Date(loggedAt).toISOString(),
+        notes: nextSlot.taskNotes.trim(),
+        aiWorkflow: nextSlot.agentEligible
+      });
+    }
+
+    return true;
   }
 
   function handleSaveNotionConfig() {
@@ -413,10 +472,14 @@ function App() {
             targetSeconds={state.targetSeconds}
             isRunning={state.isRunning}
             selectedTaskName={selectedTask?.text || null}
+            selectedTaskContext={selectedTaskContext}
+            recentTaskSlots={state.recentTaskSlots}
+            timerStatusMessage={timerStatusMessage}
             shouldHighlightStart={shouldHighlightTimerStart}
             onToggleTimer={handleToggleTimer}
             onReset={() => dispatch({ type: "reset-timer" })}
             onCommitTarget={handleCommitTarget}
+            onManualLog={handleManualLog}
           />
         </section>
       </main>

@@ -62,3 +62,23 @@ test("task form supports built-in types, custom types, AI eligibility, and editi
   await app.openAddTaskForm();
   await expect(app.taskTypeSelect).toContainText("Research");
 });
+
+test("manual log mode saves time against the selected task and caches it for reuse", async ({ page }) => {
+  const app = new AppPage(page);
+
+  await app.createTask({
+    name: "Mobile planning",
+    type: "product",
+    notes: "Capture time manually from phone."
+  });
+
+  await app.logManualTime("00:30");
+
+  await expect(app.statusMessage).toContainText("Logged 00:30 for Mobile planning.");
+  const recentSlot = page.getByRole("button", { name: /mobile planning workspace 2 \/ project 2 \/ 00:30/i });
+  await expect(recentSlot).toBeVisible();
+
+  await app.manualDurationInput.fill("00:10");
+  await recentSlot.click();
+  await expect(app.manualDurationInput).toHaveValue("00:30");
+});

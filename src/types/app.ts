@@ -7,6 +7,21 @@ export type Task = {
   done: boolean;
 };
 
+export type RecentTaskSlot = {
+  id: string;
+  taskId: string | null;
+  taskText: string;
+  taskType: string;
+  taskNotes: string;
+  agentEligible: boolean;
+  workspaceId: string;
+  workspaceName: string;
+  projectId: string;
+  projectName: string;
+  lastDurationSeconds: number | null;
+  loggedAt: number;
+};
+
 export type Project = {
   id: string;
   name: string;
@@ -34,6 +49,7 @@ export type AppState = {
   isWorkspaceMenuOpen: boolean;
   isProjectMenuOpen: boolean;
   customTaskTypes: string[];
+  recentTaskSlots: RecentTaskSlot[];
   status: string;
   workspaces: Workspace[];
 };
@@ -51,6 +67,7 @@ export type PersistedWorkspace = Partial<Workspace> & { projects?: unknown };
 export type PersistedState = Partial<AppState> & {
   workspaces?: unknown;
   customTaskTypes?: unknown;
+  recentTaskSlots?: unknown;
 };
 
 export type NotionConfig = {

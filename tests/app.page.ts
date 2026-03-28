@@ -28,6 +28,10 @@ export class AppPage {
   readonly customTaskTypeInput: Locator;
   readonly taskNotesInput: Locator;
   readonly aiEligibleCheckbox: Locator;
+  readonly timerModeLogTime: Locator;
+  readonly manualDurationInput: Locator;
+  readonly statusMessage: Locator;
+  readonly manualStepPlus: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -42,6 +46,10 @@ export class AppPage {
     this.customTaskTypeInput = page.getByLabel("Add a task type", { exact: true });
     this.taskNotesInput = page.getByLabel("Task notes");
     this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
+    this.timerModeLogTime = page.getByRole("tab", { name: /log time/i });
+    this.manualDurationInput = page.getByLabel("Manual duration (hours and minutes)");
+    this.statusMessage = page.locator(".timer-status");
+    this.manualStepPlus = page.getByRole("button", { name: /^\+\d+m$/ });
   }
 
   async goto(): Promise<void> {
@@ -145,5 +153,11 @@ export class AppPage {
     }
 
     await this.page.getByRole("button", { name: /save changes/i }).click();
+  }
+
+  async logManualTime(duration: string): Promise<void> {
+    await this.timerModeLogTime.click();
+    await this.manualDurationInput.fill(duration);
+    await this.page.getByRole("button", { name: /save time/i }).click();
   }
 }
