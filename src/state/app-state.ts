@@ -430,6 +430,35 @@ function toStableId(prefix: string, value: string, fallbackIndex: number): strin
   return `${prefix}-${slug || fallbackIndex + 1}`;
 }
 
+function dedupeImportedTasks(tasks: Array<{
+  entry: string;
+  taskType: string;
+  notes: string;
+  aiWorkflow: boolean;
+}>): Array<{
+  entry: string;
+  taskType: string;
+  notes: string;
+  aiWorkflow: boolean;
+}> {
+  const seenTitleOnlyTasks = new Set<string>();
+
+  return tasks.filter((task) => {
+    const entry = task.entry.trim();
+    const notes = task.notes.trim();
+    if (!entry) return false;
+    if (notes) return true;
+
+    const normalizedEntry = entry.toLowerCase();
+    if (seenTitleOnlyTasks.has(normalizedEntry)) {
+      return false;
+    }
+
+    seenTitleOnlyTasks.add(normalizedEntry);
+    return true;
+  });
+}
+
 function buildWorkspaceImports(workspaces: Array<{
   name: string;
   projects: Array<{
@@ -462,11 +491,12 @@ function buildWorkspaceImports(workspaces: Array<{
     const workspaceId = toStableId("workspace", workspace.name, workspaceIndex);
     const workspaceProjects = (workspace.projects.length ? workspace.projects : [{ name: "Project 1", tasks: [] }]).map((project, projectIndex) => {
       const projectId = `${workspaceId}-${toStableId("project", project.name, projectIndex)}`;
+      const dedupedTasks = dedupeImportedTasks(project.tasks);
 
       return {
         id: projectId,
         name: project.name,
-        tasks: project.tasks.map((task, taskIndex) => ({
+        tasks: dedupedTasks.map((task, taskIndex) => ({
           id: `${projectId}-task-${taskIndex + 1}`,
           text: task.entry.trim(),
           type: task.taskType.trim().toLowerCase(),

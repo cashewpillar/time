@@ -162,7 +162,7 @@ export function TaskComposer({
                 className="task-input task-notes"
                 id="taskNotesInput"
                 maxLength={400}
-                placeholder="Task notes"
+                placeholder="Notes"
                 aria-label="Task notes"
                 value={form.notes}
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}

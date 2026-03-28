@@ -42,6 +42,8 @@ The current app expects these properties in your Notion database:
 - `Notes` as `Text`
 - `AI workflow` as `Checkbox`
 
+The task form's notes field is sent to Notion as the `Notes` property whenever a timer session or manual log is saved.
+
 ### Frontend env var
 
 Create a local `.env` file from `.env.example`:

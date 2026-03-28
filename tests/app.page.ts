@@ -29,9 +29,11 @@ export class AppPage {
   readonly taskNotesInput: Locator;
   readonly aiEligibleCheckbox: Locator;
   readonly timerModeLogTime: Locator;
+  readonly timerModeLiveTimer: Locator;
   readonly manualDurationInput: Locator;
   readonly statusMessage: Locator;
-  readonly manualStepPlus: Locator;
+  readonly timerTargetPresets: Locator;
+  readonly manualDurationPresets: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -46,17 +48,20 @@ export class AppPage {
     this.customTaskTypeInput = page.getByLabel("Add a task type", { exact: true });
     this.taskNotesInput = page.getByLabel("Task notes");
     this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
+    this.timerModeLiveTimer = page.getByRole("tab", { name: /live timer/i });
     this.timerModeLogTime = page.getByRole("tab", { name: /log time/i });
     this.manualDurationInput = page.getByLabel("Manual duration (hours and minutes)");
     this.statusMessage = page.locator(".timer-status");
-    this.manualStepPlus = page.getByRole("button", { name: /^\+\d+m$/ });
+    this.timerTargetPresets = page.getByRole("group", { name: "Timer target presets" });
+    this.manualDurationPresets = page.getByRole("group", { name: "Manual duration presets" });
   }
 
   async goto(): Promise<void> {
-    await this.page.addInitScript(() => {
+    await this.page.goto("/time/");
+    await this.page.evaluate(() => {
       localStorage.clear();
     });
-    await this.page.goto("/time/");
+    await this.page.reload();
   }
 
   async openWorkspaceMenu(): Promise<void> {
@@ -157,7 +162,24 @@ export class AppPage {
 
   async logManualTime(duration: string): Promise<void> {
     await this.timerModeLogTime.click();
-    await this.manualDurationInput.fill(duration);
+    const [hours, minutes] = duration.split(":").map((part) => Number(part));
+    const totalMinutes = hours * 60 + minutes;
+    await this.manualDurationPresets.getByRole("button", { name: `${totalMinutes}m`, exact: true }).click();
     await this.page.getByRole("button", { name: /save time/i }).click();
+  }
+
+  async setTimerPreset(minutes: number): Promise<void> {
+    await this.timerModeLiveTimer.click();
+    await this.timerTargetPresets.getByRole("button", { name: `${minutes}m`, exact: true }).click();
+  }
+
+  async setManualPreset(minutes: number): Promise<void> {
+    await this.timerModeLogTime.click();
+    await this.manualDurationPresets.getByRole("button", { name: `${minutes}m`, exact: true }).click();
+  }
+
+  async showCustomManualInput(): Promise<void> {
+    await this.timerModeLogTime.click();
+    await this.manualDurationPresets.getByRole("button", { name: "Custom", exact: true }).click();
   }
 }

@@ -49,7 +49,7 @@ function App() {
   const selectedTaskContext = selectedTask && activeWorkspace && activeProject
     ? `${activeWorkspace.name} / ${activeProject.name}`
     : null;
-  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current task|Session complete|Timer (started|paused|reset)|Timer target set)/.test(state.status)
+  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current task|Session complete|Timer (started|paused|reset)|Timer target set|Time spent set)/.test(state.status)
     ? state.status
     : null;
 
@@ -293,6 +293,12 @@ function App() {
     return true;
   }
 
+  function handlePreviewManualDuration(durationSeconds: number) {
+    dispatch({ type: "set-status", status: `Time spent set to ${Math.floor(durationSeconds / 3600)
+      .toString()
+      .padStart(2, "0")}:${Math.floor((durationSeconds % 3600) / 60).toString().padStart(2, "0")}.` });
+  }
+
   function handleSaveNotionConfig() {
     updateNotionConfig({
       databaseId: databaseIdDraft,
@@ -479,6 +485,7 @@ function App() {
             onToggleTimer={handleToggleTimer}
             onReset={() => dispatch({ type: "reset-timer" })}
             onCommitTarget={handleCommitTarget}
+            onPreviewManualDuration={handlePreviewManualDuration}
             onManualLog={handleManualLog}
           />
         </section>

@@ -40,17 +40,18 @@ export function TaskList({
   const selectedTask = project?.tasks.find((task) => task.id === activeTaskId) || null;
   const queueTasks = project?.tasks.filter((task) => task.id !== activeTaskId) || [];
   const hasAnyTasks = Boolean(project?.tasks.length);
-  const [isQueueOpen, setIsQueueOpen] = useState(() => !hasAnyTasks);
+  const hasOtherTasks = queueTasks.length > 0;
+  const [isQueueOpen, setIsQueueOpen] = useState(() => !hasOtherTasks);
 
   useLayoutEffect(() => {
-    setIsQueueOpen(!hasAnyTasks);
-  }, [hasAnyTasks, project?.id]);
+    setIsQueueOpen(!hasOtherTasks);
+  }, [hasOtherTasks, project?.id]);
 
   useEffect(() => {
     onQueueExpandedChange(isQueueOpen && (queueTasks.length > 0 || selectedTask !== null));
   }, [isQueueOpen, onQueueExpandedChange, queueTasks.length, selectedTask]);
 
-  function renderTask(task: Task, indexLabel: string, isSelected: boolean) {
+  function renderTask(task: Task, isSelected: boolean) {
     const isEditing = editingTask?.id === task.id;
 
     return (
@@ -88,7 +89,6 @@ export function TaskList({
         >
           {isEditing ? (
             <>
-              <div className="task-meta">{indexLabel}</div>
               <TaskComposer
                 isOpen
                 editingTask={editingTask}
@@ -102,9 +102,6 @@ export function TaskList({
           ) : (
             <>
               <div className="task-name">{task.text}</div>
-              <div className="task-meta">
-                {indexLabel}{isSelected ? " / Active timer task" : ""}
-              </div>
               {(task.type || task.agentEligible) ? (
                 <div className="task-badges">
                   {task.type ? <span className="task-badge">{task.type}</span> : null}
@@ -136,7 +133,7 @@ export function TaskList({
         <div className="selected-task-panel">
           <div className="selected-task-kicker">Selected task</div>
           <div className="tasks-list" id="tasksList">
-            {renderTask(selectedTask, `Task ${project?.tasks.findIndex((task) => task.id === selectedTask.id)! + 1}`, true)}
+            {renderTask(selectedTask, true)}
           </div>
         </div>
       ) : null}
@@ -162,7 +159,7 @@ export function TaskList({
               />
 
               <div className="tasks-list task-queue-list">
-                {queueTasks.map((task, index) => renderTask(task, `Task ${index + 1}`, false))}
+                {queueTasks.map((task) => renderTask(task, false))}
               </div>
             </>
           ) : null}
