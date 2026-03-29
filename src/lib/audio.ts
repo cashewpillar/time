@@ -1,4 +1,5 @@
 type AudioContextConstructor = typeof AudioContext;
+let completionAlarmIntervalId: number | null = null;
 
 function getAudioContextConstructor(): AudioContextConstructor | null {
   const audioWindow = window as Window & { webkitAudioContext?: AudioContextConstructor };
@@ -55,6 +56,22 @@ export function playTimerRing(): void {
   window.setTimeout(() => {
     void context.close();
   }, 3200);
+}
+
+export function startTimerCompleteAlarm(): void {
+  if (completionAlarmIntervalId !== null) return;
+
+  playTimerRing();
+  completionAlarmIntervalId = window.setInterval(() => {
+    playTimerRing();
+  }, 3400);
+}
+
+export function stopTimerCompleteAlarm(): void {
+  if (completionAlarmIntervalId === null) return;
+
+  window.clearInterval(completionAlarmIntervalId);
+  completionAlarmIntervalId = null;
 }
 
 export function playTimerStart(): void {

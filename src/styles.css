@@ -515,6 +515,47 @@ button {
   gap: 12px;
 }
 
+.completion-alert {
+  width: min(100%, 580px);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+}
+
+.completion-alert-copy {
+  min-width: 0;
+}
+
+.completion-alert-title {
+  color: var(--white);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.completion-alert-body {
+  margin-top: 2px;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.completion-alert-dismiss {
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--button-bg);
+  color: var(--primary-button-text);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .timer-card {
   position: relative;
   overflow: hidden;
@@ -528,7 +569,7 @@ button {
 
 .tasks-section {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   background: var(--panel-strong);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow);

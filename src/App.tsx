@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { playTimerRing, playTimerStart } from "./lib/audio";
+import { playTimerStart, startTimerCompleteAlarm, stopTimerCompleteAlarm } from "./lib/audio";
 import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
 import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { parseTimerInput } from "./lib/time";
@@ -40,6 +40,7 @@ function App() {
   const [isTaskQueueExpanded, setIsTaskQueueExpanded] = useState(false);
   const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
   const [isDesktopLayout, setIsDesktopLayout] = useState(false);
+  const [isCompletionAlertVisible, setIsCompletionAlertVisible] = useState(false);
   const [theme, setTheme] = useState<ThemeName>(() => {
     if (typeof window === "undefined") return "blue";
 
@@ -120,7 +121,8 @@ function App() {
 
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
-      playTimerRing();
+      startTimerCompleteAlarm();
+      setIsCompletionAlertVisible(true);
       showTimerCompleteNotification(
         selectedTask?.text?.trim() || "Focus session",
         activeProject?.name || "Project"
@@ -151,6 +153,10 @@ function App() {
     state.completedSessions,
     state.targetSeconds
   ]);
+
+  useEffect(() => () => {
+    stopTimerCompleteAlarm();
+  }, []);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -238,10 +244,17 @@ function App() {
     if (state.isRunning) {
       dispatch({ type: "pause-timer" });
     } else {
+      stopTimerCompleteAlarm();
+      setIsCompletionAlertVisible(false);
       void requestTimerNotificationPermission();
       playTimerStart();
       dispatch({ type: "start-timer", now: Date.now() });
     }
+  }
+
+  function handleDismissCompletionAlert() {
+    stopTimerCompleteAlarm();
+    setIsCompletionAlertVisible(false);
   }
 
   function handleSaveTask(draft: { text: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
@@ -436,6 +449,20 @@ function App() {
       </header>
 
       <main className="main">
+        {isCompletionAlertVisible ? (
+          <div className="completion-alert" role="alert" aria-live="assertive">
+            <div className="completion-alert-copy">
+              <div className="completion-alert-title">Timer complete</div>
+              <div className="completion-alert-body">
+                {selectedTask?.text?.trim() || "Focus session"} is done.
+              </div>
+            </div>
+            <button className="completion-alert-dismiss" type="button" onClick={handleDismissCompletionAlert}>
+              Dismiss
+            </button>
+          </div>
+        ) : null}
+
         <section
           className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}`}
           aria-labelledby="tasksHeading"
