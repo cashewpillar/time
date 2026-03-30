@@ -75,17 +75,22 @@ function App() {
   }, [notionConfig.databaseId, notionConfig.ownerToken]);
 
   useEffect(() => {
-    if (!isNotionConfigOpen) return undefined;
+    if (!isNotionConfigOpen && !isCompletionAlertVisible) return undefined;
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        if (isCompletionAlertVisible) {
+          handleDismissCompletionAlert();
+          return;
+        }
+
         setIsNotionConfigOpen(false);
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isNotionConfigOpen]);
+  }, [isCompletionAlertVisible, isNotionConfigOpen]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -449,20 +454,6 @@ function App() {
       </header>
 
       <main className="main">
-        {isCompletionAlertVisible ? (
-          <div className="completion-alert" role="alert" aria-live="assertive">
-            <div className="completion-alert-copy">
-              <div className="completion-alert-title">Timer complete</div>
-              <div className="completion-alert-body">
-                {selectedTask?.text?.trim() || "Focus session"} is done.
-              </div>
-            </div>
-            <button className="completion-alert-dismiss" type="button" onClick={handleDismissCompletionAlert}>
-              Dismiss
-            </button>
-          </div>
-        ) : null}
-
         <section
           className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}`}
           aria-labelledby="tasksHeading"
@@ -637,6 +628,35 @@ function App() {
                 </div>
               ) : null}
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isCompletionAlertVisible ? (
+        <div
+          className="completion-alert-modal"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="completionAlertTitle"
+          aria-describedby="completionAlertBody"
+        >
+          <button
+            className="completion-alert-backdrop"
+            type="button"
+            aria-label="Dismiss timer complete message"
+            onClick={handleDismissCompletionAlert}
+          ></button>
+
+          <div className="completion-alert-card">
+            <div className="completion-alert-copy">
+              <div className="completion-alert-title" id="completionAlertTitle">Timer complete</div>
+              <div className="completion-alert-body" id="completionAlertBody">
+                {selectedTask?.text?.trim() || "Focus session"} is done.
+              </div>
+            </div>
+            <button className="completion-alert-dismiss" type="button" onClick={handleDismissCompletionAlert}>
+              Dismiss
+            </button>
           </div>
         </div>
       ) : null}
