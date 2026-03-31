@@ -1,40 +1,30 @@
 import type {
   AppState,
-  PersistedProject,
-  PersistedState,
-  RecentTaskSlot,
-  PersistedTask,
-  PersistedWorkspace,
+  Burst,
+  LegacyPersistedProject,
+  LegacyPersistedState,
+  LegacyPersistedTask,
+  LegacyPersistedWorkspace,
+  LocalCache,
+  LocalCacheBurst,
+  LocalCacheOutcome,
+  Outcome,
   Project,
+  RecentTaskSlot,
   Task,
   TaskDraft,
   Workspace
 } from "../types/app";
 import { formatManualDuration } from "../lib/time";
 
-export const STORAGE_KEY = "workspace-two-state-v2";
+export const STORAGE_KEY = "workspace-two-cache-v3";
+export const LEGACY_STORAGE_KEY = "workspace-two-state-v2";
 export const DEFAULT_TARGET_SECONDS = 20 * 60;
 export const DEFAULT_TASK_TYPES = ["development", "design", "product"] as const;
 export const RECENT_TASK_SLOT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 export type AppAction =
-  | { type: "hydrate-state"; state: PersistedState; status?: string }
-  | {
-      type: "import-notion-options";
-      taskTypes: string[];
-      workspaces: Array<{
-        name: string;
-        projects: Array<{
-          name: string;
-          tasks: Array<{
-            entry: string;
-            taskType: string;
-            notes: string;
-            aiWorkflow: boolean;
-          }>;
-        }>;
-      }>;
-    }
+  | { type: "hydrate-state"; state: Partial<AppState>; status?: string }
   | { type: "select-task"; taskId: string }
   | { type: "toggle-workspace-menu" }
   | { type: "toggle-project-menu" }
@@ -65,6 +55,28 @@ export type AppAction =
   | { type: "set-status"; status: string };
 
 export function defaultState(): AppState {
+  const workspaces: Workspace[] = [
+    {
+      id: "workspace-1",
+      name: "Workspace 1",
+      activeProjectId: "workspace-1-project-1",
+      visibleProjectIds: ["workspace-1-project-1", "workspace-1-project-2"]
+    },
+    {
+      id: "workspace-2",
+      name: "Workspace 2",
+      activeProjectId: "workspace-2-project-2",
+      visibleProjectIds: ["workspace-2-project-1", "workspace-2-project-2"]
+    }
+  ];
+  const projects: Project[] = [
+    { id: "workspace-1-project-1", workspaceId: "workspace-1", name: "Project 1" },
+    { id: "workspace-1-project-2", workspaceId: "workspace-1", name: "Project 2" },
+    { id: "workspace-2-project-1", workspaceId: "workspace-2", name: "Project 1" },
+    { id: "workspace-2-project-2", workspaceId: "workspace-2", name: "Project 2" },
+    { id: "workspace-2-project-3", workspaceId: "workspace-2", name: "Project 3" }
+  ];
+
   return {
     activeWorkspaceId: "workspace-2",
     elapsedSeconds: 0,
@@ -72,71 +84,94 @@ export function defaultState(): AppState {
     isRunning: false,
     completedSessions: 0,
     lastTickAt: null,
-    activeTaskId: null,
+    activeOutcomeId: null,
     isTaskFormOpen: false,
-    editingTaskId: null,
+    editingOutcomeId: null,
     isWorkspaceMenuOpen: false,
     isProjectMenuOpen: false,
     customTaskTypes: [],
-    recentTaskSlots: [],
+    recentBurstIds: [],
     status: "Projects, workspaces, and timer progress are saved on this device.",
-    workspaces: [
-      {
-        id: "workspace-1",
-        name: "Workspace 1",
-        activeProjectId: "workspace-1-project-1",
-        visibleProjectIds: ["workspace-1-project-1", "workspace-1-project-2"],
-        projects: [
-          { id: "workspace-1-project-1", name: "Project 1", tasks: [] },
-          { id: "workspace-1-project-2", name: "Project 2", tasks: [] }
-        ]
-      },
-      {
-        id: "workspace-2",
-        name: "Workspace 2",
-        activeProjectId: "workspace-2-project-2",
-        visibleProjectIds: ["workspace-2-project-1", "workspace-2-project-2"],
-        projects: [
-          { id: "workspace-2-project-1", name: "Project 1", tasks: [] },
-          { id: "workspace-2-project-2", name: "Project 2", tasks: [] },
-          { id: "workspace-2-project-3", name: "Project 3", tasks: [] }
-        ]
-      }
-    ]
+    workspaces,
+    projects,
+    outcomes: [],
+    bursts: []
   };
 }
 
-export function getActiveWorkspace(state: AppState): Workspace | null {
-  return state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) || null;
+export function loadStateFromStorageValue(input?: unknown): AppState {
+  if (isLocalCache(input)) {
+    return normalizeState(deserializeLocalCache(input));
+  }
+  return normalizeState(migrateLegacyState(input));
 }
 
-export function getActiveProject(state: AppState): Project | null {
-  const workspace = getActiveWorkspace(state);
-  return workspace?.projects.find((project) => project.id === workspace.activeProjectId) || null;
+export function serializeStateForStorage(state: AppState): LocalCache {
+  const cache: LocalCache = {
+    version: 3,
+    workspaceIds: state.workspaces.map((workspace) => workspace.id),
+    workspacesById: Object.fromEntries(state.workspaces.map((workspace) => [workspace.id, workspace])),
+    projectIdsByWorkspaceId: {},
+    projectsById: Object.fromEntries(state.projects.map((project) => [project.id, project])),
+    outcomeIdsByProjectId: {},
+    outcomesById: {},
+    taskBurstIdsByProjectId: {},
+    burstsById: {},
+    recentBurstIds: [...state.recentBurstIds],
+    ui: {
+      activeWorkspaceId: state.activeWorkspaceId,
+      elapsedSeconds: state.elapsedSeconds,
+      targetSeconds: state.targetSeconds,
+      isRunning: state.isRunning,
+      completedSessions: state.completedSessions,
+      lastTickAt: state.lastTickAt,
+      activeOutcomeId: state.activeOutcomeId,
+      isTaskFormOpen: state.isTaskFormOpen,
+      editingOutcomeId: state.editingOutcomeId,
+      isWorkspaceMenuOpen: state.isWorkspaceMenuOpen,
+      isProjectMenuOpen: state.isProjectMenuOpen,
+      customTaskTypes: [...state.customTaskTypes],
+      status: state.status
+    }
+  };
+
+  for (const workspace of state.workspaces) {
+    cache.projectIdsByWorkspaceId[workspace.id] = getProjectsForWorkspaceId(state, workspace.id).map((project) => project.id);
+  }
+
+  for (const project of state.projects) {
+    cache.outcomeIdsByProjectId[project.id] = getOutcomesForProjectId(state, project.id).map((outcome) => outcome.id);
+    cache.taskBurstIdsByProjectId[project.id] = state.bursts
+      .filter((burst) => burst.projectId === project.id && burst.source === "task")
+      .map((burst) => burst.id);
+  }
+
+  for (const outcome of state.outcomes) {
+    const sourceBurstIds = state.bursts
+      .filter((burst) => burst.outcomeId === outcome.id)
+      .map((burst) => burst.id);
+    cache.outcomesById[outcome.id] = {
+      ...outcome,
+      key: buildOutcomeKey(outcome.workspaceId, outcome.projectId, outcome.title),
+      sourceBurstIds
+    };
+  }
+
+  for (const burst of state.bursts) {
+    cache.burstsById[burst.id] = {
+      ...burst,
+      kind: burst.source,
+      sourceId: burst.id.replace(/^burst-(task|recent)-/, ""),
+      done: burst.source === "task"
+        ? Boolean(state.outcomes.find((outcome) => outcome.id === burst.outcomeId)?.done)
+        : false
+    };
+  }
+
+  return cache;
 }
 
-export function getEditingTask(state: AppState): Task | null {
-  const project = getActiveProject(state);
-  return project?.tasks.find((task) => task.id === state.editingTaskId) || null;
-}
-
-export function getSelectedTask(state: AppState): Task | null {
-  const project = getActiveProject(state);
-  return project?.tasks.find((task) => task.id === state.activeTaskId) || null;
-}
-
-export function getVisibleProjects(workspace: Workspace | null): Project[] {
-  if (!workspace) return [];
-  return workspace.visibleProjectIds
-    .map((projectId) => workspace.projects.find((project) => project.id === projectId) || null)
-    .filter((project): project is Project => Boolean(project));
-}
-
-export function getTaskTypeOptions(customTaskTypes: string[]): string[] {
-  return Array.from(new Set([...DEFAULT_TASK_TYPES, ...customTaskTypes]));
-}
-
-export function normalizeState(input?: PersistedState): AppState {
+export function normalizeState(input?: Partial<AppState>): AppState {
   const base = defaultState();
   const next: AppState = {
     ...base,
@@ -147,50 +182,45 @@ export function normalizeState(input?: PersistedState): AppState {
     isRunning: typeof input?.isRunning === "boolean" ? input.isRunning : base.isRunning,
     completedSessions: typeof input?.completedSessions === "number" && input.completedSessions >= 0 ? input.completedSessions : base.completedSessions,
     lastTickAt: typeof input?.lastTickAt === "number" ? input.lastTickAt : base.lastTickAt,
-    activeTaskId: typeof input?.activeTaskId === "string" ? input.activeTaskId : base.activeTaskId,
+    activeOutcomeId: typeof input?.activeOutcomeId === "string" ? input.activeOutcomeId : base.activeOutcomeId,
     isTaskFormOpen: typeof input?.isTaskFormOpen === "boolean" ? input.isTaskFormOpen : base.isTaskFormOpen,
-    editingTaskId: typeof input?.editingTaskId === "string" ? input.editingTaskId : base.editingTaskId,
+    editingOutcomeId: typeof input?.editingOutcomeId === "string" ? input.editingOutcomeId : base.editingOutcomeId,
     isWorkspaceMenuOpen: typeof input?.isWorkspaceMenuOpen === "boolean" ? input.isWorkspaceMenuOpen : base.isWorkspaceMenuOpen,
     isProjectMenuOpen: typeof input?.isProjectMenuOpen === "boolean" ? input.isProjectMenuOpen : base.isProjectMenuOpen,
-    status: typeof input?.status === "string" ? input.status : base.status,
     customTaskTypes: Array.isArray(input?.customTaskTypes)
       ? input.customTaskTypes
           .filter((type): type is string => typeof type === "string" && type.trim().length > 0)
           .map((type) => type.trim().toLowerCase())
       : base.customTaskTypes,
-    recentTaskSlots: normalizeRecentTaskSlots(input?.recentTaskSlots),
-    workspaces: base.workspaces
+    recentBurstIds: Array.isArray(input?.recentBurstIds)
+      ? input.recentBurstIds.filter((id): id is string => typeof id === "string")
+      : base.recentBurstIds,
+    status: typeof input?.status === "string" ? input.status : base.status,
+    workspaces: normalizeWorkspaces(input?.workspaces),
+    projects: normalizeProjects(input?.projects),
+    outcomes: normalizeOutcomes(input?.outcomes),
+    bursts: normalizeBursts(input?.bursts)
   };
 
-  next.workspaces = Array.isArray(input?.workspaces) && input.workspaces.length
-    ? input.workspaces.map((workspace, workspaceIndex) => {
-        const candidate = workspace as PersistedWorkspace;
-        return {
-          id: typeof candidate.id === "string" ? candidate.id : `workspace-${workspaceIndex + 1}`,
-          name: typeof candidate.name === "string" && candidate.name.trim()
-            ? candidate.name
-            : `Workspace ${workspaceIndex + 1}`,
-          activeProjectId: typeof candidate.activeProjectId === "string" ? candidate.activeProjectId : "",
-          visibleProjectIds: Array.isArray(candidate.visibleProjectIds)
-            ? candidate.visibleProjectIds.filter((id): id is string => typeof id === "string")
-            : [],
-          projects: Array.isArray(candidate.projects) && candidate.projects.length
-            ? candidate.projects.map((project, projectIndex) => normalizeProject(project as PersistedProject, workspaceIndex, projectIndex))
-            : [{ id: `project-${workspaceIndex + 1}-1`, name: "Project 1", tasks: [] }]
-        };
-      })
-    : base.workspaces;
-
   if (!next.workspaces.length) {
-    next.workspaces = defaultState().workspaces;
+    return defaultState();
   }
 
-  if (!next.workspaces.find((workspace) => workspace.id === next.activeWorkspaceId)) {
+  next.workspaces = next.workspaces.map((workspace) => normalizeWorkspace(workspace, next.projects));
+
+  if (!next.workspaces.some((workspace) => workspace.id === next.activeWorkspaceId)) {
     next.activeWorkspaceId = next.workspaces[0].id;
   }
 
-  next.workspaces = next.workspaces.map((workspace) => normalizeWorkspace(workspace));
-  next.activeTaskId = getDefaultActiveTaskId(getActiveProject(next), next.activeTaskId);
+  if (next.activeOutcomeId && !next.outcomes.some((outcome) => outcome.id === next.activeOutcomeId)) {
+    next.activeOutcomeId = null;
+  }
+
+  const activeProject = getActiveProject(next);
+  next.activeOutcomeId = getDefaultActiveOutcomeId(next, activeProject?.id || null, next.activeOutcomeId);
+
+  next.recentBurstIds = next.recentBurstIds.filter((burstId) => next.bursts.some((burst) => burst.id === burstId));
+  next.bursts = next.bursts.filter((burst) => burst.source === "task" || next.recentBurstIds.includes(burst.id));
 
   if (next.isRunning && next.lastTickAt) {
     const now = Date.now();
@@ -202,395 +232,566 @@ export function normalizeState(input?: PersistedState): AppState {
   }
 
   if (next.elapsedSeconds >= next.targetSeconds && next.isRunning) {
+    const loggedAt = Date.now();
+    const completionBurst = buildRecentBurstFromState(next, loggedAt);
     next.elapsedSeconds = next.targetSeconds;
     next.isRunning = false;
     next.lastTickAt = null;
     next.completedSessions += 1;
-    next.recentTaskSlots = mergeRecentTaskSlot(
-      next.recentTaskSlots,
-      buildRecentTaskSlotFromState(next, Date.now())
-    );
+    if (completionBurst) {
+      next.bursts = upsertBurst(next.bursts, completionBurst);
+      next.recentBurstIds = mergeRecentBurstId(next, completionBurst.id);
+    }
     next.status = "Session complete. Nice work.";
   }
 
   return next;
 }
 
-function normalizeProject(project: PersistedProject, workspaceIndex: number, projectIndex: number): Project {
+export function getActiveWorkspace(state: AppState): Workspace | null {
+  return state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) || null;
+}
+
+export function getProjectsForWorkspaceId(state: AppState, workspaceId: string): Project[] {
+  return state.projects.filter((project) => project.workspaceId === workspaceId);
+}
+
+export function getActiveProject(state: AppState): Project | null {
+  const workspace = getActiveWorkspace(state);
+  if (!workspace) return null;
+  return state.projects.find((project) => project.id === workspace.activeProjectId) || null;
+}
+
+export function getVisibleProjects(workspace: Workspace | null, state: AppState): Project[] {
+  if (!workspace) return [];
+  return workspace.visibleProjectIds
+    .map((projectId) => state.projects.find((project) => project.id === projectId) || null)
+    .filter((project): project is Project => Boolean(project));
+}
+
+export function getOutcomesForProjectId(state: AppState, projectId: string): Outcome[] {
+  return state.outcomes.filter((outcome) => outcome.projectId === projectId);
+}
+
+export function getEditingTask(state: AppState): Outcome | null {
+  return state.outcomes.find((entry) => entry.id === state.editingOutcomeId) || null;
+}
+
+export function getSelectedTask(state: AppState): Task | null {
+  const outcome = state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
+  return outcome ? outcomeToTask(outcome) : null;
+}
+
+export function getTaskTypeOptions(customTaskTypes: string[]): string[] {
+  return Array.from(new Set([...DEFAULT_TASK_TYPES, ...customTaskTypes]));
+}
+
+export function getRecentTaskSlots(state: AppState): RecentTaskSlot[] {
+  return state.recentBurstIds
+    .map((burstId) => state.bursts.find((burst) => burst.id === burstId) || null)
+    .filter((burst): burst is Burst => Boolean(burst && burst.source === "recent"))
+    .map((burst) => {
+      const workspaceName = state.workspaces.find((workspace) => workspace.id === burst.workspaceId)?.name || "Workspace";
+      const projectName = state.projects.find((project) => project.id === burst.projectId)?.name || "Project";
+      return {
+        id: burst.id,
+        taskId: burst.outcomeId,
+        taskText: burst.title,
+        taskType: burst.type,
+        taskNotes: burst.notes,
+        agentEligible: burst.agentEligible,
+        workspaceId: burst.workspaceId,
+        workspaceName,
+        projectId: burst.projectId,
+        projectName,
+        lastDurationSeconds: burst.lastDurationSeconds,
+        loggedAt: burst.loggedAt
+      };
+    });
+}
+
+function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const legacy = input as LegacyPersistedState;
+  const base = defaultState();
+
+  const workspaces = Array.isArray(legacy.workspaces) && legacy.workspaces.length
+    ? legacy.workspaces.flatMap((workspace, workspaceIndex) => {
+        const candidate = workspace as LegacyPersistedWorkspace;
+        if (typeof candidate !== "object" || !candidate) return [];
+        const workspaceId = typeof candidate.id === "string" ? candidate.id : `workspace-${workspaceIndex + 1}`;
+        return [{
+          id: workspaceId,
+          name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : `Workspace ${workspaceIndex + 1}`,
+          activeProjectId: typeof candidate.activeProjectId === "string" ? candidate.activeProjectId : "",
+          visibleProjectIds: Array.isArray(candidate.visibleProjectIds)
+            ? candidate.visibleProjectIds.filter((id): id is string => typeof id === "string")
+            : []
+        }];
+      })
+    : base.workspaces;
+
+  const projects: Project[] = [];
+  const outcomes: Outcome[] = [];
+  const bursts: Burst[] = [];
+  const recentBurstIds: string[] = [];
+  const outcomeIdsByKey = new Map<string, string>();
+  const legacyTaskIdToOutcomeId = new Map<string, string>();
+
+  function ensureOutcome(params: {
+    workspaceId: string;
+    projectId: string;
+    title: string;
+    type: string;
+    notes: string;
+    agentEligible: boolean;
+    done: boolean;
+    sourceId: string;
+  }): string {
+    const derivedTitle = deriveOutcomeTitle(params.title);
+    const key = buildOutcomeKey(params.workspaceId, params.projectId, derivedTitle);
+    const existing = outcomeIdsByKey.get(key);
+    if (existing) {
+      const outcome = outcomes.find((entry) => entry.id === existing);
+      if (outcome) {
+        if (!outcome.type && params.type.trim()) outcome.type = params.type.trim();
+        if (!outcome.notes && params.notes.trim()) outcome.notes = params.notes.trim();
+        outcome.agentEligible = outcome.agentEligible || params.agentEligible;
+        outcome.done = outcome.done && params.done;
+      }
+      return existing;
+    }
+
+    const outcomeId = `outcome-${params.projectId}-${outcomes.length + 1}`;
+    outcomes.push({
+      id: outcomeId,
+      workspaceId: params.workspaceId,
+      projectId: params.projectId,
+      title: derivedTitle,
+      type: params.type.trim(),
+      notes: params.notes.trim(),
+      agentEligible: params.agentEligible,
+      done: params.done
+    });
+    outcomeIdsByKey.set(key, outcomeId);
+    return outcomeId;
+  }
+
+  for (const workspace of workspaces) {
+    const legacyWorkspace = (legacy.workspaces as unknown[] | undefined)?.find((entry) => {
+      const candidate = entry as LegacyPersistedWorkspace;
+      return candidate?.id === workspace.id;
+    }) as LegacyPersistedWorkspace | undefined;
+    const workspaceProjects = Array.isArray(legacyWorkspace?.projects) && legacyWorkspace.projects.length
+      ? legacyWorkspace.projects
+      : base.projects.filter((project) => project.workspaceId === workspace.id).map((project) => ({
+          id: project.id,
+          name: project.name,
+          tasks: []
+        }));
+
+    for (let projectIndex = 0; projectIndex < workspaceProjects.length; projectIndex += 1) {
+      const projectCandidate = workspaceProjects[projectIndex] as LegacyPersistedProject;
+      const projectId = typeof projectCandidate.id === "string"
+        ? projectCandidate.id
+        : `${workspace.id}-project-${projectIndex + 1}`;
+      projects.push({
+        id: projectId,
+        workspaceId: workspace.id,
+        name: typeof projectCandidate.name === "string" && projectCandidate.name.trim()
+          ? projectCandidate.name
+          : `Project ${projectIndex + 1}`
+      });
+
+      const tasks = Array.isArray(projectCandidate.tasks) ? projectCandidate.tasks : [];
+      tasks.forEach((taskCandidate, taskIndex) => {
+        const task = taskCandidate as LegacyPersistedTask;
+        if (!task || typeof task.text !== "string" || !task.text.trim()) return;
+        const sourceId = typeof task.id === "string" ? task.id : `task-${workspace.id}-${projectId}-${taskIndex + 1}`;
+        const outcomeId = ensureOutcome({
+          workspaceId: workspace.id,
+          projectId,
+          title: task.text,
+          type: typeof task.type === "string" ? task.type : "",
+          notes: typeof task.notes === "string" ? task.notes : "",
+          agentEligible: Boolean(task.agentEligible),
+          done: Boolean(task.done),
+          sourceId
+        });
+
+        legacyTaskIdToOutcomeId.set(sourceId, outcomeId);
+        bursts.push({
+          id: `burst-task-${sourceId}`,
+          workspaceId: workspace.id,
+          projectId,
+          outcomeId,
+          title: task.text,
+          type: typeof task.type === "string" ? task.type : "",
+          notes: typeof task.notes === "string" ? task.notes : "",
+          agentEligible: Boolean(task.agentEligible),
+          lastDurationSeconds: null,
+          loggedAt: 0,
+          source: "task"
+        });
+      });
+    }
+  }
+
+  const recentTaskSlots = normalizeRecentTaskSlots(legacy.recentTaskSlots);
+  for (const slot of recentTaskSlots) {
+    const outcomeId = ensureOutcome({
+      workspaceId: slot.workspaceId,
+      projectId: slot.projectId,
+      title: slot.taskText,
+      type: slot.taskType,
+      notes: slot.taskNotes,
+      agentEligible: slot.agentEligible,
+      done: false,
+      sourceId: slot.id
+    });
+    const burstId = `burst-recent-${slot.id}`;
+    bursts.push({
+      id: burstId,
+      workspaceId: slot.workspaceId,
+      projectId: slot.projectId,
+      outcomeId,
+      title: slot.taskText,
+      type: slot.taskType,
+      notes: slot.taskNotes,
+      agentEligible: slot.agentEligible,
+      lastDurationSeconds: slot.lastDurationSeconds,
+      loggedAt: slot.loggedAt,
+      source: "recent"
+    });
+    recentBurstIds.push(burstId);
+  }
+
   return {
-    id: typeof project.id === "string" ? project.id : `project-${workspaceIndex + 1}-${projectIndex + 1}`,
-    name: typeof project.name === "string" && project.name.trim()
-      ? project.name
-      : `Project ${projectIndex + 1}`,
-    tasks: Array.isArray(project.tasks)
-      ? project.tasks.flatMap((task, taskIndex) => normalizeTask(task as PersistedTask | null, workspaceIndex, projectIndex, taskIndex))
-      : []
+    activeWorkspaceId: typeof legacy.activeWorkspaceId === "string" ? legacy.activeWorkspaceId : base.activeWorkspaceId,
+    elapsedSeconds: typeof legacy.elapsedSeconds === "number" ? legacy.elapsedSeconds : base.elapsedSeconds,
+    targetSeconds: typeof legacy.targetSeconds === "number" ? legacy.targetSeconds : base.targetSeconds,
+    isRunning: typeof legacy.isRunning === "boolean" ? legacy.isRunning : base.isRunning,
+    completedSessions: typeof legacy.completedSessions === "number" ? legacy.completedSessions : base.completedSessions,
+    lastTickAt: typeof legacy.lastTickAt === "number" ? legacy.lastTickAt : base.lastTickAt,
+    activeOutcomeId: typeof legacy.activeTaskId === "string" ? legacyTaskIdToOutcomeId.get(legacy.activeTaskId) || null : null,
+    isTaskFormOpen: typeof legacy.isTaskFormOpen === "boolean" ? legacy.isTaskFormOpen : base.isTaskFormOpen,
+    editingOutcomeId: typeof legacy.editingTaskId === "string" ? legacyTaskIdToOutcomeId.get(legacy.editingTaskId) || null : null,
+    isWorkspaceMenuOpen: typeof legacy.isWorkspaceMenuOpen === "boolean" ? legacy.isWorkspaceMenuOpen : base.isWorkspaceMenuOpen,
+    isProjectMenuOpen: typeof legacy.isProjectMenuOpen === "boolean" ? legacy.isProjectMenuOpen : base.isProjectMenuOpen,
+    customTaskTypes: Array.isArray(legacy.customTaskTypes)
+      ? legacy.customTaskTypes.filter((type): type is string => typeof type === "string").map((type) => type.trim().toLowerCase()).filter(Boolean)
+      : [],
+    recentBurstIds,
+    status: typeof legacy.status === "string" ? legacy.status : base.status,
+    workspaces,
+    projects,
+    outcomes,
+    bursts
   };
 }
 
-function normalizeTask(task: PersistedTask | null, workspaceIndex: number, projectIndex: number, taskIndex: number): Task[] {
-  if (!task || typeof task.text !== "string") {
-    return [];
-  }
-
-  return [{
-    id: typeof task.id === "string" ? task.id : `task-${workspaceIndex}-${projectIndex}-${taskIndex}-${Date.now()}`,
-    text: task.text,
-    type: typeof task.type === "string" ? task.type : "",
-    notes: typeof task.notes === "string" ? task.notes : "",
-    agentEligible: Boolean(task.agentEligible),
-    done: Boolean(task.done)
-  }];
+function isLocalCache(input: unknown): input is LocalCache {
+  if (!input || typeof input !== "object") return false;
+  const candidate = input as Partial<LocalCache>;
+  return candidate.version === 3 && Array.isArray(candidate.workspaceIds) && Boolean(candidate.ui);
 }
 
-function normalizeWorkspace(workspace: Workspace): Workspace {
-  const next: Workspace = { ...workspace };
+function deserializeLocalCache(cache: LocalCache): Partial<AppState> {
+  const workspaces = cache.workspaceIds
+    .map((workspaceId) => cache.workspacesById[workspaceId])
+    .filter((workspace): workspace is Workspace => Boolean(workspace));
+  const projects = Object.values(cache.projectsById || {});
+  const outcomes = Object.values(cache.outcomesById || {}).map((outcome) => ({
+    id: outcome.id,
+    workspaceId: outcome.workspaceId,
+    projectId: outcome.projectId,
+    title: outcome.title,
+    type: outcome.type,
+    notes: outcome.notes,
+    agentEligible: outcome.agentEligible,
+    done: outcome.done
+  }));
+  const bursts = Object.values(cache.burstsById || {}).map((burst) => ({
+    id: burst.id,
+    workspaceId: burst.workspaceId,
+    projectId: burst.projectId,
+    outcomeId: burst.outcomeId,
+    title: burst.title,
+    type: burst.type,
+    notes: burst.notes,
+    agentEligible: burst.agentEligible,
+    lastDurationSeconds: burst.lastDurationSeconds,
+    loggedAt: burst.loggedAt,
+    source: burst.kind
+  }));
 
-  if (!Array.isArray(next.projects) || !next.projects.length) {
-    next.projects = [{ id: `${next.id}-project-1`, name: "Project 1", tasks: [] }];
-  }
-
-  if (!next.projects.find((project) => project.id === next.activeProjectId)) {
-    next.activeProjectId = next.projects[0].id;
-  }
-
-  next.visibleProjectIds = ensureVisibleProjectIds(next);
-  return next;
+  return {
+    activeWorkspaceId: cache.ui.activeWorkspaceId,
+    elapsedSeconds: cache.ui.elapsedSeconds,
+    targetSeconds: cache.ui.targetSeconds,
+    isRunning: cache.ui.isRunning,
+    completedSessions: cache.ui.completedSessions,
+    lastTickAt: cache.ui.lastTickAt,
+    activeOutcomeId: cache.ui.activeOutcomeId,
+    isTaskFormOpen: cache.ui.isTaskFormOpen,
+    editingOutcomeId: cache.ui.editingOutcomeId,
+    isWorkspaceMenuOpen: cache.ui.isWorkspaceMenuOpen,
+    isProjectMenuOpen: cache.ui.isProjectMenuOpen,
+    customTaskTypes: cache.ui.customTaskTypes,
+    recentBurstIds: [...cache.recentBurstIds],
+    status: cache.ui.status,
+    workspaces,
+    projects,
+    outcomes,
+    bursts
+  };
 }
 
-function getDefaultActiveTaskId(project: Project | null, currentTaskId: string | null): string | null {
-  if (!project) return null;
-  if (currentTaskId && project.tasks.some((task) => task.id === currentTaskId)) {
-    return currentTaskId;
-  }
-
-  return project.tasks.find((task) => !task.done)?.id || project.tasks[0]?.id || null;
+function normalizeWorkspaces(input: unknown): Workspace[] {
+  if (!Array.isArray(input)) return defaultState().workspaces;
+  return input.flatMap((workspace, index) => {
+    if (!workspace || typeof workspace !== "object") return [];
+    const candidate = workspace as Partial<Workspace>;
+    return [{
+      id: typeof candidate.id === "string" ? candidate.id : `workspace-${index + 1}`,
+      name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : `Workspace ${index + 1}`,
+      activeProjectId: typeof candidate.activeProjectId === "string" ? candidate.activeProjectId : "",
+      visibleProjectIds: Array.isArray(candidate.visibleProjectIds)
+        ? candidate.visibleProjectIds.filter((id): id is string => typeof id === "string")
+        : []
+    }];
+  });
 }
 
-function ensureVisibleProjectIds(workspace: Workspace): string[] {
-  const validIds = workspace.projects.map((project) => project.id);
+function normalizeProjects(input: unknown): Project[] {
+  if (!Array.isArray(input)) return defaultState().projects;
+  return input.flatMap((project, index) => {
+    if (!project || typeof project !== "object") return [];
+    const candidate = project as Partial<Project>;
+    if (typeof candidate.workspaceId !== "string") return [];
+    return [{
+      id: typeof candidate.id === "string" ? candidate.id : `project-${index + 1}`,
+      workspaceId: candidate.workspaceId,
+      name: typeof candidate.name === "string" && candidate.name.trim() ? candidate.name : `Project ${index + 1}`
+    }];
+  });
+}
+
+function normalizeOutcomes(input: unknown): Outcome[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((outcome, index) => {
+    if (!outcome || typeof outcome !== "object") return [];
+    const candidate = outcome as Partial<Outcome>;
+    if (typeof candidate.projectId !== "string" || typeof candidate.workspaceId !== "string") return [];
+    if (typeof candidate.title !== "string" || !candidate.title.trim()) return [];
+    return [{
+      id: typeof candidate.id === "string" ? candidate.id : `outcome-${index + 1}`,
+      workspaceId: candidate.workspaceId,
+      projectId: candidate.projectId,
+      title: candidate.title.trim(),
+      type: typeof candidate.type === "string" ? candidate.type.trim() : "",
+      notes: typeof candidate.notes === "string" ? candidate.notes : "",
+      agentEligible: Boolean(candidate.agentEligible),
+      done: Boolean(candidate.done)
+    }];
+  });
+}
+
+function normalizeBursts(input: unknown): Burst[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((burst, index) => {
+    if (!burst || typeof burst !== "object") return [];
+    const candidate = burst as Partial<Burst>;
+    if (typeof candidate.projectId !== "string" || typeof candidate.workspaceId !== "string") return [];
+    if (typeof candidate.title !== "string" || !candidate.title.trim()) return [];
+    return [{
+      id: typeof candidate.id === "string" ? candidate.id : `burst-${index + 1}`,
+      workspaceId: candidate.workspaceId,
+      projectId: candidate.projectId,
+      outcomeId: typeof candidate.outcomeId === "string" ? candidate.outcomeId : null,
+      title: candidate.title.trim(),
+      type: typeof candidate.type === "string" ? candidate.type.trim() : "",
+      notes: typeof candidate.notes === "string" ? candidate.notes : "",
+      agentEligible: Boolean(candidate.agentEligible),
+      lastDurationSeconds: typeof candidate.lastDurationSeconds === "number" ? candidate.lastDurationSeconds : null,
+      loggedAt: typeof candidate.loggedAt === "number" ? candidate.loggedAt : 0,
+      source: candidate.source === "recent" ? "recent" : "task"
+    }];
+  });
+}
+
+function normalizeWorkspace(workspace: Workspace, projects: Project[]): Workspace {
+  const workspaceProjects = projects.filter((project) => project.workspaceId === workspace.id);
+  if (!workspaceProjects.length) {
+    const fallbackProjectId = `${workspace.id}-project-1`;
+    return {
+      ...workspace,
+      activeProjectId: fallbackProjectId,
+      visibleProjectIds: [fallbackProjectId]
+    };
+  }
+
+  const validIds = workspaceProjects.map((project) => project.id);
+  const activeProjectId = validIds.includes(workspace.activeProjectId) ? workspace.activeProjectId : validIds[0];
+  const visibleProjectIds = ensureVisibleProjectIds({
+    ...workspace,
+    activeProjectId,
+    visibleProjectIds: workspace.visibleProjectIds
+  }, workspaceProjects);
+
+  return { ...workspace, activeProjectId, visibleProjectIds };
+}
+
+function ensureVisibleProjectIds(workspace: Workspace, projects: Project[]): string[] {
+  const validIds = projects.map((project) => project.id);
   const requiredCount = Math.min(2, validIds.length);
-  const visible = (Array.isArray(workspace.visibleProjectIds) ? workspace.visibleProjectIds : [])
-    .filter((id) => validIds.includes(id))
-    .slice(0, 2);
+  const visible = workspace.visibleProjectIds.filter((id) => validIds.includes(id)).slice(0, 2);
 
   for (const projectId of validIds) {
     if (visible.length >= requiredCount) break;
-    if (!visible.includes(projectId)) {
-      visible.push(projectId);
-    }
+    if (!visible.includes(projectId)) visible.push(projectId);
   }
 
   if (workspace.activeProjectId && validIds.includes(workspace.activeProjectId) && !visible.includes(workspace.activeProjectId)) {
-    if (requiredCount <= 1 || visible.length <= 1) {
-      visible[0] = workspace.activeProjectId;
-    } else {
-      visible[1] = workspace.activeProjectId;
-    }
+    visible[visible.length > 1 ? 1 : 0] = workspace.activeProjectId;
   }
 
   return visible.slice(0, requiredCount);
 }
 
-function cloneWorkspace(workspace: Workspace): Workspace {
+function outcomeToTask(outcome: Outcome): Task {
   return {
-    ...workspace,
-    visibleProjectIds: [...workspace.visibleProjectIds],
-    projects: workspace.projects.map((project) => ({
-      ...project,
-      tasks: project.tasks.map((task) => ({ ...task }))
-    }))
+    id: outcome.id,
+    text: outcome.title,
+    type: outcome.type,
+    notes: outcome.notes,
+    agentEligible: outcome.agentEligible,
+    done: outcome.done
   };
 }
 
 function normalizeRecentTaskSlots(input: unknown): RecentTaskSlot[] {
   const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
   if (!Array.isArray(input)) return [];
-
-  return input
-    .flatMap((slot, index) => {
-      if (!slot || typeof slot !== "object") return [];
-      const candidate = slot as Partial<RecentTaskSlot>;
-      if (typeof candidate.taskText !== "string" || !candidate.taskText.trim()) return [];
-      if (typeof candidate.workspaceId !== "string" || typeof candidate.projectId !== "string") return [];
-      if (typeof candidate.workspaceName !== "string" || typeof candidate.projectName !== "string") return [];
-      if (typeof candidate.loggedAt !== "number" || candidate.loggedAt < cutoff) return [];
-
-      return [{
-        id: typeof candidate.id === "string" ? candidate.id : `recent-task-slot-${index}-${candidate.loggedAt}`,
-        taskId: typeof candidate.taskId === "string" ? candidate.taskId : null,
-        taskText: candidate.taskText.trim(),
-        taskType: typeof candidate.taskType === "string" ? candidate.taskType.trim() : "",
-        taskNotes: typeof candidate.taskNotes === "string" ? candidate.taskNotes : "",
-        agentEligible: Boolean(candidate.agentEligible),
-        workspaceId: candidate.workspaceId,
-        workspaceName: candidate.workspaceName.trim(),
-        projectId: candidate.projectId,
-        projectName: candidate.projectName.trim(),
-        lastDurationSeconds: typeof candidate.lastDurationSeconds === "number" && candidate.lastDurationSeconds >= 0
-          ? candidate.lastDurationSeconds
-          : null,
-        loggedAt: candidate.loggedAt
-      }];
-    })
-    .sort((left, right) => right.loggedAt - left.loggedAt)
-    .reduce<RecentTaskSlot[]>((slots, slot) => mergeRecentTaskSlot(slots, slot), []);
-}
-
-function isSameRecentTaskTitle(left: RecentTaskSlot, right: RecentTaskSlot): boolean {
-  return normalizeImportKey(left.taskText) === normalizeImportKey(right.taskText);
-}
-
-function mergeRecentTaskSlot(slots: RecentTaskSlot[], nextSlot: RecentTaskSlot | null): RecentTaskSlot[] {
-  if (!nextSlot) return slots;
-
-  const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
-  const matchingSlot = slots.find((slot) => slot.loggedAt >= cutoff && isSameRecentTaskTitle(slot, nextSlot)) || null;
-  const mergedSlot: RecentTaskSlot = matchingSlot
-    ? {
-        ...matchingSlot,
-        ...nextSlot,
-        id: matchingSlot.id,
-        taskId: nextSlot.taskId ?? matchingSlot.taskId,
-        lastDurationSeconds: nextSlot.lastDurationSeconds ?? matchingSlot.lastDurationSeconds,
-        loggedAt: nextSlot.loggedAt
-      }
-    : nextSlot;
-  const remaining = slots.filter((slot) => slot.loggedAt >= cutoff && !isSameRecentTaskTitle(slot, mergedSlot));
-  return [mergedSlot, ...remaining].sort((left, right) => right.loggedAt - left.loggedAt);
-}
-
-function buildRecentTaskSlot(task: Task, workspace: Workspace, project: Project, loggedAt: number): RecentTaskSlot {
-  return {
-    id: `recent-task-slot-${loggedAt}`,
-    taskId: task.id,
-    taskText: task.text.trim(),
-    taskType: task.type.trim(),
-    taskNotes: task.notes,
-    agentEligible: task.agentEligible,
-    workspaceId: workspace.id,
-    workspaceName: workspace.name,
-    projectId: project.id,
-    projectName: project.name,
-    lastDurationSeconds: null,
-    loggedAt
-  };
-}
-
-function buildRecentTaskSlotFromState(state: AppState, loggedAt: number): RecentTaskSlot | null {
-  const workspace = getActiveWorkspace(state);
-  const project = getActiveProject(state);
-  const task = getSelectedTask(state);
-  if (!workspace || !project || !task) return null;
-  return buildRecentTaskSlot(task, workspace, project, loggedAt);
-}
-
-function setActiveProjectOnWorkspace(workspace: Workspace, projectId: string): Workspace {
-  const nextWorkspace = cloneWorkspace(workspace);
-  const previousActiveId = nextWorkspace.activeProjectId;
-  nextWorkspace.activeProjectId = projectId;
-
-  const visible = nextWorkspace.visibleProjectIds
-    .filter((id) => nextWorkspace.projects.some((project) => project.id === id))
-    .slice(0, 2);
-
-  if (visible.includes(projectId)) {
-    nextWorkspace.visibleProjectIds = ensureVisibleProjectIds(nextWorkspace);
-    return nextWorkspace;
-  }
-
-  if (visible.length < Math.min(2, nextWorkspace.projects.length)) {
-    visible.push(projectId);
-    nextWorkspace.visibleProjectIds = ensureVisibleProjectIds({
-      ...nextWorkspace,
-      visibleProjectIds: visible
-    });
-    return nextWorkspace;
-  }
-
-  const replacementIndex = visible.findIndex((id) => id !== previousActiveId);
-  visible[replacementIndex >= 0 ? replacementIndex : 0] = projectId;
-  nextWorkspace.visibleProjectIds = ensureVisibleProjectIds({
-    ...nextWorkspace,
-    visibleProjectIds: visible
+  return input.flatMap((slot, index) => {
+    if (!slot || typeof slot !== "object") return [];
+    const candidate = slot as Partial<RecentTaskSlot>;
+    if (typeof candidate.taskText !== "string" || !candidate.taskText.trim()) return [];
+    if (typeof candidate.workspaceId !== "string" || typeof candidate.projectId !== "string") return [];
+    if (typeof candidate.workspaceName !== "string" || typeof candidate.projectName !== "string") return [];
+    if (typeof candidate.loggedAt !== "number" || candidate.loggedAt < cutoff) return [];
+    return [{
+      id: typeof candidate.id === "string" ? candidate.id : `recent-task-slot-${index}-${candidate.loggedAt}`,
+      taskId: typeof candidate.taskId === "string" ? candidate.taskId : null,
+      taskText: candidate.taskText.trim(),
+      taskType: typeof candidate.taskType === "string" ? candidate.taskType.trim() : "",
+      taskNotes: typeof candidate.taskNotes === "string" ? candidate.taskNotes : "",
+      agentEligible: Boolean(candidate.agentEligible),
+      workspaceId: candidate.workspaceId,
+      workspaceName: candidate.workspaceName.trim(),
+      projectId: candidate.projectId,
+      projectName: candidate.projectName.trim(),
+      lastDurationSeconds: typeof candidate.lastDurationSeconds === "number" && candidate.lastDurationSeconds >= 0 ? candidate.lastDurationSeconds : null,
+      loggedAt: candidate.loggedAt
+    }];
   });
-  return nextWorkspace;
 }
 
-function updateActiveWorkspace(state: AppState, updater: (workspace: Workspace) => Workspace): Workspace[] {
-  return state.workspaces.map((workspace) =>
-    workspace.id === state.activeWorkspaceId ? updater(workspace) : workspace
-  );
+function getDefaultActiveOutcomeId(state: AppState, projectId: string | null, currentOutcomeId: string | null): string | null {
+  if (!projectId) return null;
+  const projectOutcomes = getOutcomesForProjectId(state, projectId);
+  if (currentOutcomeId && projectOutcomes.some((outcome) => outcome.id === currentOutcomeId)) {
+    return currentOutcomeId;
+  }
+  return projectOutcomes.find((outcome) => !outcome.done)?.id || projectOutcomes[0]?.id || null;
 }
 
-function updateWorkspaceById(state: AppState, workspaceId: string, updater: (workspace: Workspace) => Workspace): Workspace[] {
-  return state.workspaces.map((workspace) =>
-    workspace.id === workspaceId ? updater(workspace) : workspace
-  );
+function setActiveProjectOnWorkspace(state: AppState, workspaceId: string, projectId: string): Workspace[] {
+  return state.workspaces.map((workspace) => {
+    if (workspace.id !== workspaceId) return workspace;
+    const workspaceProjects = getProjectsForWorkspaceId(state, workspace.id);
+    const previousActiveId = workspace.activeProjectId;
+    const visible = workspace.visibleProjectIds
+      .filter((id) => workspaceProjects.some((project) => project.id === id))
+      .slice(0, 2);
+
+    if (visible.includes(projectId)) {
+      return {
+        ...workspace,
+        activeProjectId: projectId,
+        visibleProjectIds: ensureVisibleProjectIds({ ...workspace, activeProjectId: projectId }, workspaceProjects)
+      };
+    }
+
+    if (visible.length < Math.min(2, workspaceProjects.length)) {
+      visible.push(projectId);
+      return {
+        ...workspace,
+        activeProjectId: projectId,
+        visibleProjectIds: ensureVisibleProjectIds({ ...workspace, activeProjectId: projectId, visibleProjectIds: visible }, workspaceProjects)
+      };
+    }
+
+    const replacementIndex = visible.findIndex((id) => id !== previousActiveId);
+    visible[replacementIndex >= 0 ? replacementIndex : 0] = projectId;
+    return {
+      ...workspace,
+      activeProjectId: projectId,
+      visibleProjectIds: ensureVisibleProjectIds({ ...workspace, activeProjectId: projectId, visibleProjectIds: visible }, workspaceProjects)
+    };
+  });
 }
 
 function withStatus(state: AppState, status: string): AppState {
   return { ...state, status };
 }
 
-function toStableId(prefix: string, value: string, fallbackIndex: number): string {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-
-  return `${prefix}-${slug || fallbackIndex + 1}`;
+function deriveOutcomeTitle(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "Outcome";
+  const delimiterMatch = trimmed.match(/^(.+?)(?:\s[-:\/|>]+\s)(.+)$/);
+  if (delimiterMatch?.[1]?.trim()) return delimiterMatch[1].trim();
+  return trimmed;
 }
 
-function normalizeImportKey(value: string): string {
-  return value.trim().toLowerCase();
+function buildOutcomeKey(workspaceId: string, projectId: string, outcomeTitle: string): string {
+  return `${workspaceId}::${projectId}::${outcomeTitle.trim().toLowerCase()}`;
 }
 
-function hasSameTaskIdentity(left: Task, right: Task): boolean {
-  return normalizeImportKey(left.text) === normalizeImportKey(right.text)
-    && normalizeImportKey(left.type) === normalizeImportKey(right.type)
-    && left.notes.trim() === right.notes.trim()
-    && left.agentEligible === right.agentEligible;
-}
-
-function ensureUniqueTaskId(tasks: Task[], preferredId: string): string {
-  if (!tasks.some((task) => task.id === preferredId)) {
-    return preferredId;
-  }
-
-  let index = 2;
-  while (tasks.some((task) => task.id === `${preferredId}-${index}`)) {
-    index += 1;
-  }
-
-  return `${preferredId}-${index}`;
-}
-
-function dedupeImportedTasks(tasks: Array<{
-  entry: string;
-  taskType: string;
-  notes: string;
-  aiWorkflow: boolean;
-}>): Array<{
-  entry: string;
-  taskType: string;
-  notes: string;
-  aiWorkflow: boolean;
-}> {
-  const seenTaskTitles = new Set<string>();
-
-  return tasks.filter((task) => {
-    const entry = task.entry.trim();
-    if (!entry) return false;
-
-    const normalizedEntry = entry.toLowerCase();
-    if (seenTaskTitles.has(normalizedEntry)) {
-      return false;
-    }
-
-    seenTaskTitles.add(normalizedEntry);
-    return true;
+function mergeRecentBurstId(state: AppState, nextBurstId: string): string[] {
+  const nextBurst = state.bursts.find((burst) => burst.id === nextBurstId) || null;
+  if (!nextBurst) return state.recentBurstIds;
+  const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
+  const remaining = state.recentBurstIds.filter((burstId) => {
+    const burst = state.bursts.find((entry) => entry.id === burstId);
+    return Boolean(burst && burst.loggedAt >= cutoff && burst.title.trim().toLowerCase() !== nextBurst.title.trim().toLowerCase());
   });
+  return [nextBurstId, ...remaining];
 }
 
-function buildWorkspaceImports(workspaces: Array<{
-  name: string;
-  projects: Array<{
-    name: string;
-    tasks: Array<{
-      entry: string;
-      taskType: string;
-      notes: string;
-      aiWorkflow: boolean;
-    }>;
-  }>;
-}>): Workspace[] {
-  const cleanedWorkspaces = workspaces
-    .map((workspace) => ({
-      name: workspace.name.trim(),
-      projects: workspace.projects
-        .map((project) => ({
-          name: project.name.trim(),
-          tasks: project.tasks.filter((task) => task.entry.trim())
-        }))
-        .filter((project) => project.name)
-    }))
-    .filter((workspace) => workspace.name);
-
-  const workspaceSeeds = cleanedWorkspaces.length
-    ? cleanedWorkspaces
-    : [{ name: "Workspace", projects: [{ name: "Project 1", tasks: [] }] }];
-
-  return workspaceSeeds.map((workspace, workspaceIndex) => {
-    const workspaceId = toStableId("workspace", workspace.name, workspaceIndex);
-    const workspaceProjects = (workspace.projects.length ? workspace.projects : [{ name: "Project 1", tasks: [] }]).map((project, projectIndex) => {
-      const projectId = `${workspaceId}-${toStableId("project", project.name, projectIndex)}`;
-      const dedupedTasks = dedupeImportedTasks(project.tasks);
-
-      return {
-        id: projectId,
-        name: project.name,
-        tasks: dedupedTasks.map((task, taskIndex) => ({
-          id: `${projectId}-task-${taskIndex + 1}`,
-          text: task.entry.trim(),
-          type: task.taskType.trim().toLowerCase(),
-          notes: task.notes.trim(),
-          agentEligible: task.aiWorkflow,
-          done: false
-        }))
-      };
-    });
-
-    const activeProjectId = workspaceProjects[0].id;
-    return normalizeWorkspace({
-      id: workspaceId,
-      name: workspace.name,
-      activeProjectId,
-      visibleProjectIds: workspaceProjects.slice(0, Math.min(2, workspaceProjects.length)).map((project) => project.id),
-      projects: workspaceProjects
-    });
-  });
+function upsertBurst(bursts: Burst[], nextBurst: Burst): Burst[] {
+  const existingIndex = bursts.findIndex((burst) => burst.id === nextBurst.id);
+  if (existingIndex === -1) return [nextBurst, ...bursts];
+  return bursts.map((burst) => burst.id === nextBurst.id ? nextBurst : burst);
 }
 
-function findImportedSelection(
-  currentWorkspace: Workspace | null,
-  currentProject: Project | null,
-  currentTask: Task | null,
-  importedWorkspaces: Workspace[]
-): { workspaces: Workspace[]; workspaceId: string | null; taskId: string | null } {
-  const matchedWorkspace = currentWorkspace
-    ? importedWorkspaces.find((workspace) => normalizeImportKey(workspace.name) === normalizeImportKey(currentWorkspace.name)) || null
-    : null;
-
-  if (!matchedWorkspace) {
-    return {
-      workspaces: importedWorkspaces,
-      workspaceId: importedWorkspaces[0]?.id || null,
-      taskId: null
-    };
-  }
-
-  const matchedProject = currentProject
-    ? matchedWorkspace.projects.find((project) => normalizeImportKey(project.name) === normalizeImportKey(currentProject.name)) || null
-    : null;
-
-  const workspaceWithProject = matchedProject
-    ? setActiveProjectOnWorkspace(matchedWorkspace, matchedProject.id)
-    : matchedWorkspace;
-
-  const nextWorkspaces = importedWorkspaces.map((workspace) =>
-    workspace.id === workspaceWithProject.id ? workspaceWithProject : workspace
-  );
-
-  const matchedTask = currentTask && matchedProject
-    ? matchedProject.tasks.find((task) => hasSameTaskIdentity(task, currentTask)) || null
-    : null;
-
+function buildRecentBurstFromState(state: AppState, loggedAt: number): Burst | null {
+  const workspace = getActiveWorkspace(state);
+  const project = getActiveProject(state);
+  const outcome = state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
+  if (!workspace || !project || !outcome) return null;
   return {
-    workspaces: nextWorkspaces,
-    workspaceId: workspaceWithProject.id,
-    taskId: matchedTask?.id || null
+    id: `burst-recent-${loggedAt}`,
+    workspaceId: workspace.id,
+    projectId: project.id,
+    outcomeId: outcome.id,
+    title: outcome.title,
+    type: outcome.type,
+    notes: outcome.notes,
+    agentEligible: outcome.agentEligible,
+    lastDurationSeconds: null,
+    loggedAt,
+    source: "recent"
   };
 }
 
@@ -598,68 +799,25 @@ export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "hydrate-state": {
       const nextState = normalizeState(action.state);
-      if (action.status) {
-        nextState.status = action.status;
-      }
-      return nextState;
+      return action.status ? { ...nextState, status: action.status } : nextState;
     }
     case "toggle-workspace-menu":
-      return {
-        ...state,
-        isWorkspaceMenuOpen: !state.isWorkspaceMenuOpen,
-        isProjectMenuOpen: false
-      };
+      return { ...state, isWorkspaceMenuOpen: !state.isWorkspaceMenuOpen, isProjectMenuOpen: false };
     case "toggle-project-menu":
-      return {
-        ...state,
-        isProjectMenuOpen: !state.isProjectMenuOpen,
-        isWorkspaceMenuOpen: false
-      };
+      return { ...state, isProjectMenuOpen: !state.isProjectMenuOpen, isWorkspaceMenuOpen: false };
     case "close-menus":
-      if (!state.isWorkspaceMenuOpen && !state.isProjectMenuOpen) {
-        return state;
-      }
-      return {
-        ...state,
-        isWorkspaceMenuOpen: false,
-        isProjectMenuOpen: false
-      };
+      return { ...state, isWorkspaceMenuOpen: false, isProjectMenuOpen: false };
     case "set-status":
       return withStatus(state, action.status);
     case "select-task":
-      return {
-        ...state,
-        activeTaskId: action.taskId,
-        status: "Task selected for the next session."
-      };
-    case "import-notion-options": {
-      const normalizedTaskTypes = action.taskTypes
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean);
-      const currentWorkspace = getActiveWorkspace(state);
-      const currentProject = getActiveProject(state);
-      const currentTask = getSelectedTask(state);
-      const importedWorkspaces = buildWorkspaceImports(action.workspaces);
-      const preservedSelection = findImportedSelection(currentWorkspace, currentProject, currentTask, importedWorkspaces);
-
-      return normalizeState({
-        ...state,
-        workspaces: preservedSelection.workspaces,
-        activeWorkspaceId: preservedSelection.workspaceId || state.activeWorkspaceId,
-        activeTaskId: preservedSelection.taskId,
-        customTaskTypes: Array.from(new Set([...state.customTaskTypes, ...normalizedTaskTypes])).sort(),
-        isWorkspaceMenuOpen: false,
-        isProjectMenuOpen: false,
-        status: "Imported workspaces, projects, and task types from recent Notion entries."
-      });
-    }
+      return { ...state, activeOutcomeId: action.taskId, status: "Task selected for the next session." };
     case "select-workspace": {
-      const nextWorkspace = state.workspaces.find((workspace) => workspace.id === action.workspaceId) || null;
-      const nextProject = nextWorkspace?.projects.find((project) => project.id === nextWorkspace.activeProjectId) || null;
+      const workspace = state.workspaces.find((entry) => entry.id === action.workspaceId) || null;
+      const activeOutcomeId = getDefaultActiveOutcomeId(state, workspace?.activeProjectId || null, null);
       return normalizeState({
         ...state,
         activeWorkspaceId: action.workspaceId,
-        activeTaskId: getDefaultActiveTaskId(nextProject, null),
+        activeOutcomeId,
         isWorkspaceMenuOpen: false,
         isProjectMenuOpen: false,
         status: "Workspace selected."
@@ -669,385 +827,233 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const nextNumber = state.workspaces.length + 1;
       const newWorkspaceId = `workspace-${action.now}`;
       const firstProjectId = `${newWorkspaceId}-project-1`;
-
       return normalizeState({
         ...state,
-        workspaces: [
-          ...state.workspaces,
-          {
-            id: newWorkspaceId,
-            name: `Workspace ${nextNumber}`,
-            activeProjectId: firstProjectId,
-            visibleProjectIds: [firstProjectId],
-            projects: [{ id: firstProjectId, name: "Project 1", tasks: [] }]
-          }
-        ],
+        workspaces: [...state.workspaces, { id: newWorkspaceId, name: `Workspace ${nextNumber}`, activeProjectId: firstProjectId, visibleProjectIds: [firstProjectId] }],
+        projects: [...state.projects, { id: firstProjectId, workspaceId: newWorkspaceId, name: "Project 1" }],
         activeWorkspaceId: newWorkspaceId,
-        isWorkspaceMenuOpen: false,
-        isProjectMenuOpen: false,
+        activeOutcomeId: null,
         status: `Workspace ${nextNumber} created.`
       });
     }
     case "rename-workspace":
       return normalizeState({
         ...state,
-        workspaces: state.workspaces.map((workspace) =>
-          workspace.id === action.workspaceId ? { ...workspace, name: action.name } : workspace
-        ),
+        workspaces: state.workspaces.map((workspace) => workspace.id === action.workspaceId ? { ...workspace, name: action.name } : workspace),
         status: "Workspace renamed."
       });
     case "delete-workspace": {
-      if (state.workspaces.length === 1) {
-        return withStatus(state, "You need at least one workspace.");
-      }
-      const workspace = state.workspaces.find((entry) => entry.id === action.workspaceId);
-      const nextWorkspaces = state.workspaces.filter((entry) => entry.id !== action.workspaceId);
+      if (state.workspaces.length === 1) return withStatus(state, "You need at least one workspace.");
+      const nextWorkspaces = state.workspaces.filter((workspace) => workspace.id !== action.workspaceId);
+      const nextProjects = state.projects.filter((project) => project.workspaceId !== action.workspaceId);
+      const nextOutcomes = state.outcomes.filter((outcome) => outcome.workspaceId !== action.workspaceId);
+      const nextBursts = state.bursts.filter((burst) => burst.workspaceId !== action.workspaceId);
+      const nextWorkspaceId = state.activeWorkspaceId === action.workspaceId ? nextWorkspaces[0].id : state.activeWorkspaceId;
       return normalizeState({
         ...state,
         workspaces: nextWorkspaces,
-        activeWorkspaceId: state.activeWorkspaceId === action.workspaceId ? nextWorkspaces[0].id : state.activeWorkspaceId,
-        activeTaskId: state.activeWorkspaceId === action.workspaceId ? null : state.activeTaskId,
-        isWorkspaceMenuOpen: false,
-        isProjectMenuOpen: false,
-        status: `${workspace?.name || "Workspace"} deleted.`
+        projects: nextProjects,
+        outcomes: nextOutcomes,
+        bursts: nextBursts,
+        recentBurstIds: state.recentBurstIds.filter((burstId) => nextBursts.some((burst) => burst.id === burstId)),
+        activeWorkspaceId: nextWorkspaceId,
+        activeOutcomeId: state.activeWorkspaceId === action.workspaceId ? null : state.activeOutcomeId,
+        status: "Workspace deleted."
       });
     }
     case "select-project": {
-      const nextWorkspaces = updateActiveWorkspace(state, (workspace) => setActiveProjectOnWorkspace(workspace, action.projectId));
-      const nextProject = nextWorkspaces
-        .find((workspace) => workspace.id === state.activeWorkspaceId)
-        ?.projects.find((project) => project.id === action.projectId) || null;
+      const workspaces = setActiveProjectOnWorkspace(state, state.activeWorkspaceId, action.projectId);
       return normalizeState({
         ...state,
-        workspaces: nextWorkspaces,
-        activeTaskId: getDefaultActiveTaskId(nextProject, null),
+        workspaces,
+        activeOutcomeId: getDefaultActiveOutcomeId({ ...state, workspaces }, action.projectId, null),
         isProjectMenuOpen: false,
         status: "Project selected."
       });
     }
     case "create-project": {
-      const activeWorkspace = getActiveWorkspace(state);
-      if (!activeWorkspace) return state;
-      const nextProjectName = `Project ${activeWorkspace.projects.length + 1}`;
-      return normalizeState({
+      const workspace = getActiveWorkspace(state);
+      if (!workspace) return state;
+      const projectId = `${workspace.id}-project-${action.now}`;
+      const nextProjects = [...state.projects, { id: projectId, workspaceId: workspace.id, name: `Project ${getProjectsForWorkspaceId(state, workspace.id).length + 1}` }];
+      const nextState = {
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => {
-          const nextNumber = workspace.projects.length + 1;
-          const projectId = `${workspace.id}-project-${action.now}`;
-          const newProject: Project = { id: projectId, name: `Project ${nextNumber}`, tasks: [] };
-          return setActiveProjectOnWorkspace(
-            {
-              ...workspace,
-              projects: [...workspace.projects, newProject]
-            },
-            projectId
-          );
-        }),
-        activeTaskId: null,
+        projects: nextProjects,
+        workspaces: state.workspaces.map((entry) => entry.id === workspace.id ? { ...entry, activeProjectId: projectId, visibleProjectIds: [...entry.visibleProjectIds, projectId].slice(-2) } : entry),
+        activeOutcomeId: null,
         isProjectMenuOpen: false,
-        status: `${nextProjectName} created.`
-      });
+        status: `Project ${getProjectsForWorkspaceId(state, workspace.id).length + 1} created.`
+      };
+      return normalizeState(nextState);
     }
     case "rename-project":
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => ({
-          ...workspace,
-          projects: workspace.projects.map((project) =>
-            project.id === action.projectId ? { ...project, name: action.name } : project
-          )
-        })),
+        projects: state.projects.map((project) => project.id === action.projectId ? { ...project, name: action.name } : project),
         status: "Project renamed."
       });
     case "delete-project": {
-      const activeWorkspace = getActiveWorkspace(state);
-      if (!activeWorkspace) return state;
-      if (activeWorkspace.projects.length === 1) {
-        return withStatus(state, "You need at least one project.");
-      }
-      const project = activeWorkspace.projects.find((entry) => entry.id === action.projectId);
+      const workspace = getActiveWorkspace(state);
+      if (!workspace) return state;
+      const workspaceProjects = getProjectsForWorkspaceId(state, workspace.id);
+      if (workspaceProjects.length === 1) return withStatus(state, "You need at least one project.");
+      const remainingProjects = state.projects.filter((project) => project.id !== action.projectId);
+      const remainingOutcomes = state.outcomes.filter((outcome) => outcome.projectId !== action.projectId);
+      const remainingBursts = state.bursts.filter((burst) => burst.projectId !== action.projectId);
+      const nextWorkspace = state.workspaces.map((entry) => {
+        if (entry.id !== workspace.id) return entry;
+        const nextProjectIds = remainingProjects.filter((project) => project.workspaceId === workspace.id).map((project) => project.id);
+        const activeProjectId = entry.activeProjectId === action.projectId ? nextProjectIds[0] : entry.activeProjectId;
+        return normalizeWorkspace({
+          ...entry,
+          activeProjectId,
+          visibleProjectIds: entry.visibleProjectIds.filter((id) => id !== action.projectId)
+        }, remainingProjects.filter((project) => project.workspaceId === workspace.id));
+      });
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => {
-          const remainingProjects = workspace.projects.filter((entry) => entry.id !== action.projectId);
-          const nextWorkspace: Workspace = {
-            ...workspace,
-            projects: remainingProjects,
-            visibleProjectIds: workspace.visibleProjectIds.filter((id) => id !== action.projectId)
-          };
-          if (workspace.activeProjectId === action.projectId) {
-            return setActiveProjectOnWorkspace(nextWorkspace, remainingProjects[0].id);
-          }
-          return normalizeWorkspace(nextWorkspace);
-        }),
-        activeTaskId: activeWorkspace.activeProjectId === action.projectId ? null : state.activeTaskId,
-        isProjectMenuOpen: false,
-        status: `${project?.name || "Project"} deleted.`
+        workspaces: nextWorkspace,
+        projects: remainingProjects,
+        outcomes: remainingOutcomes,
+        bursts: remainingBursts,
+        recentBurstIds: state.recentBurstIds.filter((burstId) => remainingBursts.some((burst) => burst.id === burstId)),
+        activeOutcomeId: null,
+        status: "Project deleted."
       });
     }
     case "set-timer-target":
-      return {
-        ...state,
-        targetSeconds: action.targetSeconds,
-        elapsedSeconds: Math.min(state.elapsedSeconds, action.targetSeconds),
-        status: `Timer target set to ${Math.floor(action.targetSeconds / 60)
-          .toString()
-          .padStart(2, "0")}:${(action.targetSeconds % 60).toString().padStart(2, "0")}.`
-      };
-    case "start-timer": {
-      const resetElapsed = state.elapsedSeconds >= state.targetSeconds ? 0 : state.elapsedSeconds;
-      return {
-        ...state,
-        elapsedSeconds: resetElapsed,
-        isRunning: true,
-        lastTickAt: action.now,
-        status: `Timer started toward ${Math.floor(state.targetSeconds / 60)
-          .toString()
-          .padStart(2, "0")}:${(state.targetSeconds % 60).toString().padStart(2, "0")}.`
-      };
-    }
+      return { ...state, targetSeconds: action.targetSeconds, elapsedSeconds: Math.min(state.elapsedSeconds, action.targetSeconds), status: `Timer target set to ${Math.floor(action.targetSeconds / 60).toString().padStart(2, "0")}:${(action.targetSeconds % 60).toString().padStart(2, "0")}.` };
+    case "start-timer":
+      return { ...state, elapsedSeconds: state.elapsedSeconds >= state.targetSeconds ? 0 : state.elapsedSeconds, isRunning: true, lastTickAt: action.now, status: `Timer started toward ${Math.floor(state.targetSeconds / 60).toString().padStart(2, "0")}:${(state.targetSeconds % 60).toString().padStart(2, "0")}.` };
     case "pause-timer":
-      return {
-        ...state,
-        isRunning: false,
-        lastTickAt: null,
-        status: "Timer paused."
-      };
+      return { ...state, isRunning: false, lastTickAt: null, status: "Timer paused." };
     case "reset-timer":
-      return {
-        ...state,
-        isRunning: false,
-        elapsedSeconds: 0,
-        lastTickAt: null,
-        status: "Timer reset to 00:00."
-      };
+      return { ...state, isRunning: false, elapsedSeconds: 0, lastTickAt: null, status: "Timer reset to 00:00." };
     case "tick": {
-      if (!state.isRunning) return state;
-      if (!state.lastTickAt) {
-        return {
-          ...state,
-          lastTickAt: action.now
-        };
-      }
-
+      if (!state.isRunning || !state.lastTickAt) return state;
       const elapsedSinceLastTick = Math.floor((action.now - state.lastTickAt) / 1000);
-      if (elapsedSinceLastTick <= 0) {
-        return state;
-      }
-
+      if (elapsedSinceLastTick <= 0) return state;
       const nextElapsed = state.elapsedSeconds + elapsedSinceLastTick;
       if (nextElapsed >= state.targetSeconds) {
-        const loggedAt = action.now;
-        return {
+        const recentBurst = buildRecentBurstFromState(state, action.now);
+        return normalizeState({
           ...state,
           elapsedSeconds: state.targetSeconds,
           isRunning: false,
           lastTickAt: null,
           completedSessions: state.completedSessions + 1,
-          recentTaskSlots: mergeRecentTaskSlot(state.recentTaskSlots, buildRecentTaskSlotFromState(state, loggedAt)),
+          bursts: recentBurst ? upsertBurst(state.bursts, recentBurst) : state.bursts,
+          recentBurstIds: recentBurst ? [recentBurst.id, ...state.recentBurstIds.filter((id) => id !== recentBurst.id)] : state.recentBurstIds,
           status: "Session complete. Nice work."
-        };
+        });
       }
-      return {
-        ...state,
-        elapsedSeconds: nextElapsed,
-        lastTickAt: state.lastTickAt + elapsedSinceLastTick * 1000
-      };
+      return { ...state, elapsedSeconds: nextElapsed, lastTickAt: state.lastTickAt + elapsedSinceLastTick * 1000 };
     }
     case "open-task-form":
-      return {
-        ...state,
-        isTaskFormOpen: true,
-        editingTaskId: null
-      };
+      return { ...state, isTaskFormOpen: true, editingOutcomeId: null };
     case "close-task-form":
-      return {
-        ...state,
-        isTaskFormOpen: false,
-        editingTaskId: null
-      };
+      return { ...state, isTaskFormOpen: false, editingOutcomeId: null };
     case "edit-task":
-      return {
-        ...state,
-        editingTaskId: action.taskId,
-        isTaskFormOpen: true,
-        status: "Editing task."
-      };
+      return { ...state, editingOutcomeId: action.taskId, isTaskFormOpen: true, status: "Editing task." };
     case "save-task": {
+      const project = getActiveProject(state);
+      const workspace = getActiveWorkspace(state);
+      if (!project || !workspace) return state;
       const customType = action.customType.trim().toLowerCase();
-      const nextCustomTypes = customType && !state.customTaskTypes.includes(customType)
-        ? [...state.customTaskTypes, customType].sort()
-        : state.customTaskTypes;
-      const nextTaskId = state.editingTaskId || `task-${action.now}`;
-
+      const nextCustomTypes = customType && !state.customTaskTypes.includes(customType) ? [...state.customTaskTypes, customType].sort() : state.customTaskTypes;
+      const outcomeId = state.editingOutcomeId || `outcome-${action.now}`;
+      const nextOutcomes = state.editingOutcomeId
+        ? state.outcomes.map((outcome) => outcome.id === state.editingOutcomeId ? { ...outcome, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible } : outcome)
+        : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, done: false }];
+      const nextBursts = state.editingOutcomeId
+        ? state.bursts.map((burst) => burst.outcomeId === state.editingOutcomeId && burst.source === "task" ? { ...burst, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible } : burst)
+        : [...state.bursts, { id: `burst-task-${outcomeId}`, workspaceId: workspace.id, projectId: project.id, outcomeId, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, lastDurationSeconds: null, loggedAt: 0, source: "task" }];
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => ({
-          ...workspace,
-          projects: workspace.projects.map((project) => {
-            if (project.id !== workspace.activeProjectId) return project;
-            if (state.editingTaskId) {
-              return {
-                ...project,
-                tasks: project.tasks.map((task) =>
-                  task.id === state.editingTaskId
-                    ? {
-                        ...task,
-                        text: action.draft.text,
-                        type: action.draft.type,
-                        notes: action.draft.notes,
-                        agentEligible: action.draft.agentEligible
-                      }
-                    : task
-                )
-              };
-            }
-
-            return {
-              ...project,
-              tasks: [
-                ...project.tasks,
-                {
-                  id: nextTaskId,
-                  text: action.draft.text,
-                  type: action.draft.type,
-                  notes: action.draft.notes,
-                  agentEligible: action.draft.agentEligible,
-                  done: false
-                }
-              ]
-            };
-          })
-        })),
-        activeTaskId: nextTaskId,
+        outcomes: nextOutcomes,
+        bursts: nextBursts,
+        activeOutcomeId: outcomeId,
         customTaskTypes: nextCustomTypes,
         isTaskFormOpen: false,
-        editingTaskId: null,
-        status: state.editingTaskId ? "Task updated." : "Task added."
+        editingOutcomeId: null,
+        status: state.editingOutcomeId ? "Task updated." : "Task added."
       });
     }
-    case "toggle-task": {
-      const task = getActiveProject(state)?.tasks.find((entry) => entry.id === action.taskId);
+    case "toggle-task":
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => ({
-          ...workspace,
-          projects: workspace.projects.map((project) =>
-            project.id === workspace.activeProjectId
-              ? {
-                  ...project,
-                  tasks: project.tasks.map((entry) =>
-                    entry.id === action.taskId ? { ...entry, done: !entry.done } : entry
-                  )
-                }
-              : project
-          )
-        })),
-        status: task?.done ? "Task marked active." : "Task completed."
+        outcomes: state.outcomes.map((outcome) => outcome.id === action.taskId ? { ...outcome, done: !outcome.done } : outcome),
+        status: state.outcomes.find((outcome) => outcome.id === action.taskId)?.done ? "Task marked active." : "Task completed."
       });
-    }
     case "delete-task": {
-      const deletedActiveTask = state.activeTaskId === action.taskId;
+      const deletedActive = state.activeOutcomeId === action.taskId;
+      const nextOutcomes = state.outcomes.filter((outcome) => outcome.id !== action.taskId);
+      const nextBursts = state.bursts.filter((burst) => burst.outcomeId !== action.taskId || burst.source === "recent");
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => ({
-          ...workspace,
-          projects: workspace.projects.map((project) =>
-            project.id === workspace.activeProjectId
-              ? {
-                  ...project,
-                  tasks: project.tasks.filter((task) => task.id !== action.taskId)
-                }
-              : project
-          )
-        })),
-        activeTaskId: deletedActiveTask ? null : state.activeTaskId,
-        isRunning: deletedActiveTask ? false : state.isRunning,
-        elapsedSeconds: deletedActiveTask ? 0 : state.elapsedSeconds,
-        lastTickAt: deletedActiveTask ? null : state.lastTickAt,
-        status: deletedActiveTask ? "Task deleted and timer reset." : "Task deleted."
+        outcomes: nextOutcomes,
+        bursts: nextBursts,
+        activeOutcomeId: deletedActive ? null : state.activeOutcomeId,
+        isRunning: deletedActive ? false : state.isRunning,
+        elapsedSeconds: deletedActive ? 0 : state.elapsedSeconds,
+        lastTickAt: deletedActive ? null : state.lastTickAt,
+        status: deletedActive ? "Task deleted and timer reset." : "Task deleted."
       });
     }
     case "clear-completed": {
-      const activeProject = getActiveProject(state);
-      if (!activeProject) return state;
-      const before = activeProject.tasks.length;
-      const remainingTasks = activeProject.tasks.filter((task) => !task.done);
+      const project = getActiveProject(state);
+      if (!project) return state;
+      const remaining = state.outcomes.filter((outcome) => outcome.projectId !== project.id || !outcome.done);
       return normalizeState({
         ...state,
-        workspaces: updateActiveWorkspace(state, (workspace) => ({
-          ...workspace,
-          projects: workspace.projects.map((project) =>
-            project.id === workspace.activeProjectId
-              ? {
-                  ...project,
-                  tasks: project.tasks.filter((task) => !task.done)
-                }
-              : project
-          )
-        })),
-        activeTaskId: getDefaultActiveTaskId({ ...activeProject, tasks: remainingTasks }, state.activeTaskId),
-        status: before === activeProject.tasks.length ? "No completed tasks to clear." : "Completed tasks cleared."
+        outcomes: remaining,
+        bursts: state.bursts.filter((burst) => burst.projectId !== project.id || burst.source !== "task" || remaining.some((outcome) => outcome.id === burst.outcomeId)),
+        activeOutcomeId: getDefaultActiveOutcomeId({ ...state, outcomes: remaining }, project.id, state.activeOutcomeId),
+        status: "Completed tasks cleared."
       });
     }
-    case "log-manual-entry":
-      return {
-        ...state,
-        recentTaskSlots: mergeRecentTaskSlot(state.recentTaskSlots, action.slot),
-        status: `Logged ${formatManualDuration(action.durationSeconds)} for ${action.slot.taskText}.`
-      };
-    case "clear-recent-task-slots":
-      return {
-        ...state,
-        recentTaskSlots: [],
-        status: "Recent task slots cleared."
-      };
-    case "restore-recent-task": {
-      const targetWorkspace = state.workspaces.find((workspace) => workspace.id === action.slot.workspaceId) || null;
-      const targetProject = targetWorkspace?.projects.find((project) => project.id === action.slot.projectId) || null;
-      if (!targetWorkspace || !targetProject) {
-        return withStatus(state, "The original workspace or project is no longer available.");
-      }
-
-      const restoredTaskId = `task-${action.now}`;
-      const restoredTask: Task = {
-        id: restoredTaskId,
-        text: action.slot.taskText,
+    case "log-manual-entry": {
+      const burst: Burst = {
+        id: action.slot.id,
+        workspaceId: action.slot.workspaceId,
+        projectId: action.slot.projectId,
+        outcomeId: action.slot.taskId,
+        title: action.slot.taskText,
         type: action.slot.taskType,
         notes: action.slot.taskNotes,
         agentEligible: action.slot.agentEligible,
-        done: false
+        lastDurationSeconds: action.durationSeconds,
+        loggedAt: action.slot.loggedAt,
+        source: "recent"
       };
-
-      const nextWorkspaces = updateWorkspaceById(state, targetWorkspace.id, (workspace) => {
-        const workspaceWithTask = {
-          ...workspace,
-          projects: workspace.projects.map((project) =>
-            project.id === targetProject.id
-              ? {
-                  ...project,
-                  tasks: [...project.tasks, restoredTask]
-                }
-              : project
-          )
-        };
-
-        return setActiveProjectOnWorkspace(workspaceWithTask, targetProject.id);
-      });
-
       return normalizeState({
         ...state,
-        workspaces: nextWorkspaces,
-        activeWorkspaceId: targetWorkspace.id,
-        activeTaskId: restoredTaskId,
-        recentTaskSlots: state.recentTaskSlots.map((slot) =>
-          slot.id === action.slot.id
-            ? {
-                ...slot,
-                taskId: restoredTaskId
-              }
-            : slot
-        ),
+        bursts: upsertBurst(state.bursts, burst),
+        recentBurstIds: [burst.id, ...state.recentBurstIds.filter((id) => id !== burst.id)],
+        status: `Logged ${formatManualDuration(action.durationSeconds)} for ${action.slot.taskText}.`
+      });
+    }
+    case "clear-recent-task-slots":
+      return normalizeState({
+        ...state,
+        recentBurstIds: [],
+        bursts: state.bursts.filter((burst) => burst.source !== "recent"),
+        status: "Recent task slots cleared."
+      });
+    case "restore-recent-task": {
+      const burst = state.bursts.find((entry) => entry.id === action.slot.id) || null;
+      const workspace = state.workspaces.find((entry) => entry.id === action.slot.workspaceId) || null;
+      const project = state.projects.find((entry) => entry.id === action.slot.projectId) || null;
+      if (!workspace || !project || !burst) return withStatus(state, "The original workspace or project is no longer available.");
+      const outcomeId = burst.outcomeId || `outcome-${action.now}`;
+      const hasOutcome = state.outcomes.some((outcome) => outcome.id === outcomeId);
+      return normalizeState({
+        ...state,
+        workspaces: setActiveProjectOnWorkspace(state, workspace.id, project.id),
+        activeWorkspaceId: workspace.id,
+        activeOutcomeId: outcomeId,
+        outcomes: hasOutcome ? state.outcomes : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: burst.title, type: burst.type, notes: burst.notes, agentEligible: burst.agentEligible, done: false }],
+        bursts: state.bursts.map((entry) => entry.id === burst.id ? { ...entry, outcomeId } : entry),
         status: "Task restored from recent activity."
       });
     }

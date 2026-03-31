@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { TaskComposer } from "./TaskComposer";
-import type { Project, Task, TaskDraft } from "../types/app";
+import type { Outcome, Project, TaskDraft } from "../types/app";
 
 type TaskListProps = {
   project: Project | null;
-  editingTask: Task | null;
+  outcomes: Outcome[];
+  editingTask: Outcome | null;
   activeTaskId: string | null;
   taskTypeOptions: string[];
   isComposerOpen: boolean;
@@ -22,6 +23,7 @@ type TaskListProps = {
 
 export function TaskList({
   project,
+  outcomes,
   editingTask,
   activeTaskId,
   taskTypeOptions,
@@ -37,9 +39,9 @@ export function TaskList({
   onCancelComposer,
   onSaveTask
 }: TaskListProps) {
-  const selectedTask = project?.tasks.find((task) => task.id === activeTaskId) || null;
-  const queueTasks = project?.tasks.filter((task) => task.id !== activeTaskId) || [];
-  const hasAnyTasks = Boolean(project?.tasks.length);
+  const selectedTask = outcomes.find((task) => task.id === activeTaskId) || null;
+  const queueTasks = outcomes.filter((task) => task.id !== activeTaskId);
+  const hasAnyTasks = Boolean(outcomes.length);
   const hasOtherTasks = queueTasks.length > 0;
   const [isQueueOpen, setIsQueueOpen] = useState(() => !hasOtherTasks);
 
@@ -51,7 +53,7 @@ export function TaskList({
     onQueueExpandedChange(isQueueOpen && (queueTasks.length > 0 || selectedTask !== null));
   }, [isQueueOpen, onQueueExpandedChange, queueTasks.length, selectedTask]);
 
-  function renderTask(task: Task, isSelected: boolean) {
+  function renderTask(task: Outcome, isSelected: boolean) {
     const isEditing = editingTask?.id === task.id;
 
     return (
@@ -101,7 +103,7 @@ export function TaskList({
             </>
           ) : (
             <>
-              <div className="task-name">{task.text}</div>
+              <div className="task-name">{task.title}</div>
               {(task.type || task.agentEligible) ? (
                 <div className="task-badges">
                   {task.type ? <span className="task-badge">{task.type}</span> : null}
@@ -186,11 +188,11 @@ export function TaskList({
         </div>
       ) : null}
 
-      {!project?.tasks.length ? (
+      {!outcomes.length ? (
         <div className="task-empty-state">Add a task, then pick it to start focusing.</div>
       ) : null}
 
-      {project?.tasks.length && !selectedTask ? (
+      {outcomes.length && !selectedTask ? (
         <div className="task-empty-state">Pick a task to lock in your focus session.</div>
       ) : null}
 

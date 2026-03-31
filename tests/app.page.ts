@@ -50,7 +50,7 @@ export class AppPage {
     this.taskNotesInput = page.getByLabel("Task notes");
     this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
     this.timerModeLiveTimer = page.getByRole("tab", { name: /live timer/i });
-    this.timerModeLogTime = page.getByRole("tab", { name: /log time/i });
+    this.timerModeLogTime = page.getByRole("tab", { name: /log time|time logger/i });
     this.manualDurationHoursInput = page.getByLabel("Manual duration hours");
     this.manualDurationMinutesInput = page.getByLabel("Manual duration minutes");
     this.statusMessage = page.locator(".timer-status");

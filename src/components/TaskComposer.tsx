@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { Task, TaskDraft } from "../types/app";
+import type { Outcome, TaskDraft } from "../types/app";
 
 type TaskComposerProps = {
   isOpen: boolean;
-  editingTask: Task | null;
+  editingTask: Outcome | null;
   taskTypeOptions: string[];
   onOpen?: () => void;
   onCancel: () => void;
@@ -53,7 +53,7 @@ export function TaskComposer({
     if (editingTask) {
       const normalizedType = (editingTask.type || "").toLowerCase();
       setForm({
-        text: editingTask.text,
+        text: editingTask.title,
         type: taskTypeOptions.includes(normalizedType) ? normalizedType : "__custom__",
         customType: taskTypeOptions.includes(normalizedType) ? "" : editingTask.type || "",
         notes: editingTask.notes || "",

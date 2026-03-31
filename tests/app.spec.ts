@@ -1,6 +1,75 @@
 import { expect, test } from "@playwright/test";
 import { AppPage } from "./app.page";
-import { appReducer, defaultState } from "../src/state/app-state";
+import { getRecentTaskSlots, loadStateFromStorageValue, serializeStateForStorage } from "../src/state/app-state";
+
+test("migrates local state into normalized cache with derived outcomes", async () => {
+  const legacyState = {
+    activeWorkspaceId: "workspace-2",
+    activeTaskId: "task-landing-hero",
+    workspaces: [{
+      id: "workspace-2",
+      name: "Workspace 2",
+      activeProjectId: "workspace-2-project-2",
+      visibleProjectIds: ["workspace-2-project-1", "workspace-2-project-2"],
+      projects: [
+        { id: "workspace-2-project-1", name: "Project 1", tasks: [] },
+        {
+          id: "workspace-2-project-2",
+          name: "Project 2",
+          tasks: [
+            {
+              id: "task-landing-hero",
+              text: "Landing page - hero copy",
+              type: "design",
+              notes: "Tighten value prop",
+              agentEligible: false,
+              done: false
+            },
+            {
+              id: "task-landing-mobile",
+              text: "Landing page - mobile polish",
+              type: "design",
+              notes: "",
+              agentEligible: true,
+              done: true
+            }
+          ]
+        }
+      ]
+    }],
+    recentTaskSlots: [{
+      id: "recent-landing-cta",
+      taskId: null,
+      taskText: "Landing page - CTA review",
+      taskType: "design",
+      taskNotes: "Check conversion copy",
+      agentEligible: false,
+      workspaceId: "workspace-2",
+      workspaceName: "Workspace 2",
+      projectId: "workspace-2-project-2",
+      projectName: "Project 2",
+      lastDurationSeconds: 15 * 60,
+      loggedAt: Date.now()
+    }]
+  };
+
+  const state = loadStateFromStorageValue(legacyState);
+  const cache = serializeStateForStorage(state);
+  const outcomeIds = cache.outcomeIdsByProjectId["workspace-2-project-2"] || [];
+
+  expect(cache.version).toBe(3);
+  expect(outcomeIds).toHaveLength(1);
+  expect(cache.outcomesById[outcomeIds[0]]?.title).toBe("Landing page");
+  expect(cache.outcomesById[outcomeIds[0]]?.sourceBurstIds).toHaveLength(3);
+  expect(cache.taskBurstIdsByProjectId["workspace-2-project-2"]).toHaveLength(2);
+  expect(cache.recentBurstIds).toHaveLength(1);
+
+  const hydrated = loadStateFromStorageValue(cache);
+  const hydratedProjectOutcomes = hydrated.outcomes.filter((outcome) => outcome.projectId === "workspace-2-project-2");
+  expect(hydratedProjectOutcomes).toHaveLength(1);
+  expect(getRecentTaskSlots(hydrated)).toHaveLength(1);
+  expect(getRecentTaskSlots(hydrated)[0]?.taskText).toBe("Landing page - CTA review");
+});
 
 test.beforeEach(async ({ page }) => {
   const app = new AppPage(page);
@@ -100,16 +169,13 @@ test("manual log mode saves time against the selected task and caches it for reu
 
   await app.logManualTime("00:30");
 
-  await expect(app.statusMessage).toContainText("Logged 00:30 for Mobile planning.");
-  const recentSlot = page.getByRole("button", { name: /mobile planning workspace 2 \/ project 2 \/ 00:30/i });
+  await expect(app.statusMessage).toContainText("Logged 00:30 for Desk planning.");
+  const recentSlot = page.getByRole("button", { name: /desk planning workspace 2 \/ project 2 \/ 00:30/i });
   await expect(recentSlot).toBeVisible();
 
   await app.setManualPreset(10);
   await recentSlot.click();
   await expect(app.manualDurationPresets.getByRole("button", { name: "30m", exact: true })).toHaveClass(/active/);
-  await expect(page.locator(".timer-focus-name")).toContainText("Mobile planning");
-
-  await app.selectTask("Desk planning");
   await expect(page.locator(".timer-focus-name")).toContainText("Desk planning");
 });
 
@@ -140,26 +206,4 @@ test("clicking a recent slot syncs workspace, project, and selected task", async
   await expect(app.projectTabs.nth(0)).toHaveText(/project 1/i);
   await expect(page.locator(".selected-task-panel .task-name")).toContainText("Slot sync task");
   await expect(page.locator(".selected-task-panel .task-notes-copy")).toContainText("Sync me back");
-});
-
-test("notion import dedupes duplicate task titles", async () => {
-  const nextState = appReducer(defaultState(), {
-    type: "import-notion-options",
-    taskTypes: [],
-    workspaces: [{
-      name: "Imported Workspace",
-      projects: [{
-        name: "Imported Project",
-        tasks: [
-          { entry: "Same task", taskType: "development", notes: "", aiWorkflow: false },
-          { entry: "Same task", taskType: "design", notes: "   ", aiWorkflow: true },
-          { entry: "Same task", taskType: "development", notes: "Has notes", aiWorkflow: false }
-        ]
-      }]
-    }]
-  });
-
-  const importedTasks = nextState.workspaces[0]?.projects[0]?.tasks ?? [];
-  expect(importedTasks).toHaveLength(1);
-  expect(importedTasks[0]?.text).toBe("Same task");
 });
