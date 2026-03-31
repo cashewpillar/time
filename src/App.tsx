@@ -377,6 +377,7 @@ function App() {
             key={activeProject?.id || "no-project"}
             project={activeProject}
             outcomes={projectOutcomes}
+            bursts={state.bursts}
             editingTask={editingTask}
             activeTaskId={state.activeOutcomeId}
             taskTypeOptions={taskTypeOptions}

@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { TaskComposer } from "./TaskComposer";
-import type { Outcome, Project, TaskDraft } from "../types/app";
+import { formatManualDuration } from "../lib/time";
+import type { Burst, Outcome, Project, TaskDraft } from "../types/app";
 
 type TaskListProps = {
   project: Project | null;
   outcomes: Outcome[];
+  bursts: Burst[];
   editingTask: Outcome | null;
   activeTaskId: string | null;
   taskTypeOptions: string[];
@@ -24,6 +26,7 @@ type TaskListProps = {
 export function TaskList({
   project,
   outcomes,
+  bursts,
   editingTask,
   activeTaskId,
   taskTypeOptions,
@@ -53,8 +56,30 @@ export function TaskList({
     onQueueExpandedChange(isQueueOpen && (queueTasks.length > 0 || selectedTask !== null));
   }, [isQueueOpen, onQueueExpandedChange, queueTasks.length, selectedTask]);
 
+  function getOutcomeBursts(outcomeId: string): Burst[] {
+    return bursts
+      .filter((burst) => burst.outcomeId === outcomeId && burst.source === "recent")
+      .sort((left, right) => right.loggedAt - left.loggedAt);
+  }
+
+  function getOutcomeTrackedSeconds(outcomeId: string): number {
+    return getOutcomeBursts(outcomeId)
+      .reduce((sum, burst) => sum + (burst.lastDurationSeconds || 0), 0);
+  }
+
+  function formatBurstTimestamp(timestamp: number): string {
+    if (!timestamp) return "Saved from backlog";
+    return new Date(timestamp).toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+
   function renderTask(task: Outcome, isSelected: boolean) {
     const isEditing = editingTask?.id === task.id;
+    const outcomeBursts = getOutcomeBursts(task.id);
+    const trackedSeconds = getOutcomeTrackedSeconds(task.id);
+    const recentBursts = outcomeBursts.slice(0, isSelected ? 4 : 2);
 
     return (
       <div key={task.id} className={`task-item${task.done ? " done" : ""}${isEditing ? " editing" : ""}${isSelected ? " selected" : " compact"}`}>
@@ -110,6 +135,22 @@ export function TaskList({
                   {task.agentEligible ? <span className="task-badge">AI Agent OK</span> : null}
                 </div>
               ) : null}
+              <div className="burst-summary">
+                <span className="burst-summary-pill">{outcomeBursts.length} burst{outcomeBursts.length === 1 ? "" : "s"}</span>
+                <span className="burst-summary-pill">{trackedSeconds ? formatManualDuration(trackedSeconds) : "00:00"} tracked</span>
+              </div>
+              {recentBursts.length ? (
+                <div className={`burst-timeline${isSelected ? " selected" : ""}`}>
+                  {recentBursts.map((burst) => (
+                    <div key={burst.id} className="burst-pill">
+                      <span className="burst-pill-duration">{burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"}</span>
+                      <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="burst-empty">No bursts yet. Start the timer or log time to build history.</div>
+              )}
               {task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
             </>
           )}
@@ -133,7 +174,7 @@ export function TaskList({
     <>
       {selectedTask ? (
         <div className="selected-task-panel">
-          <div className="selected-task-kicker">Selected task</div>
+          <div className="selected-task-kicker">Selected outcome</div>
           <div className="tasks-list" id="tasksList">
             {renderTask(selectedTask, true)}
           </div>

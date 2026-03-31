@@ -789,7 +789,7 @@ function buildRecentBurstFromState(state: AppState, loggedAt: number): Burst | n
     type: outcome.type,
     notes: outcome.notes,
     agentEligible: outcome.agentEligible,
-    lastDurationSeconds: null,
+    lastDurationSeconds: state.targetSeconds,
     loggedAt,
     source: "recent"
   };
