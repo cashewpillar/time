@@ -3,6 +3,7 @@ import { playTimerStart, startTimerCompleteAlarm, stopTimerCompleteAlarm } from 
 import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
 import { parseTimerInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
+import { SessionLabelField } from "./components/SessionLabelField";
 import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
@@ -12,6 +13,7 @@ import {
   getActiveProject,
   getSelectedTask,
   getActiveWorkspace,
+  buildBurstHistoryLabel,
   getEditingTask,
   getOutcomesForProjectId,
   getRecentTaskSlots,
@@ -33,6 +35,8 @@ function App() {
   const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
   const [isDesktopLayout, setIsDesktopLayout] = useState(false);
   const [isCompletionAlertVisible, setIsCompletionAlertVisible] = useState(false);
+  const [completionBurstId, setCompletionBurstId] = useState<string | null>(null);
+  const [completionSessionLabel, setCompletionSessionLabel] = useState("");
   const [theme, setTheme] = useState<ThemeName>(() => {
     if (typeof window === "undefined") return "blue";
 
@@ -109,8 +113,13 @@ function App() {
 
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
+      const latestBurst = state.bursts
+        .filter((burst) => burst.source === "recent" && burst.outcomeId === state.activeOutcomeId)
+        .sort((left, right) => right.loggedAt - left.loggedAt)[0] || null;
       startTimerCompleteAlarm();
       setIsCompletionAlertVisible(true);
+      setCompletionBurstId(latestBurst?.id || null);
+      setCompletionSessionLabel(latestBurst?.sessionLabel || "");
       showTimerCompleteNotification(
         selectedTask?.text?.trim() || "Focus session",
         activeProject?.name || "Project"
@@ -220,6 +229,8 @@ function App() {
   function handleDismissCompletionAlert() {
     stopTimerCompleteAlarm();
     setIsCompletionAlertVisible(false);
+    setCompletionBurstId(null);
+    setCompletionSessionLabel("");
   }
 
   function handleSaveTask(draft: { text: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
@@ -248,7 +259,7 @@ function App() {
     });
   }
 
-  async function handleManualLog(durationSeconds: number, slotId: string | null): Promise<boolean> {
+  async function handleManualLog(durationSeconds: number, slotId: string | null, sessionLabel: string): Promise<boolean> {
     const selectedRecentSlot = slotId
       ? recentTaskSlots.find((slot) => slot.id === slotId) || null
       : null;
@@ -256,11 +267,12 @@ function App() {
     const activeSlot = selectedRecentSlot || (selectedTask && activeWorkspace && activeProject
       ? {
           id: `recent-task-slot-${Date.now()}`,
-          taskId: selectedTask.id,
-          taskText: selectedTask.text.trim(),
-          taskType: selectedTask.type.trim(),
-          taskNotes: selectedTask.notes,
-          agentEligible: selectedTask.agentEligible,
+        taskId: selectedTask.id,
+        taskText: selectedTask.text.trim(),
+        sessionLabel: "",
+        taskType: selectedTask.type.trim(),
+        taskNotes: selectedTask.notes,
+        agentEligible: selectedTask.agentEligible,
           workspaceId: activeWorkspace.id,
           workspaceName: activeWorkspace.name,
           projectId: activeProject.id,
@@ -283,7 +295,7 @@ function App() {
       loggedAt
     };
 
-    dispatch({ type: "log-manual-entry", slot: nextSlot, durationSeconds });
+    dispatch({ type: "log-manual-entry", slot: nextSlot, durationSeconds, sessionLabel });
     return true;
   }
 
@@ -333,6 +345,20 @@ function App() {
     }
 
     dispatch({ type: "restore-recent-task", slot, now: Date.now() });
+  }
+
+  function handleSaveCompletionSessionLabel() {
+    if (!completionBurstId) {
+      handleDismissCompletionAlert();
+      return;
+    }
+
+    dispatch({
+      type: "set-burst-session-label",
+      burstId: completionBurstId,
+      sessionLabel: completionSessionLabel
+    });
+    handleDismissCompletionAlert();
   }
 
   return (
@@ -468,9 +494,26 @@ function App() {
                 {selectedTask?.text?.trim() || "Focus session"} is done.
               </div>
             </div>
-            <button className="completion-alert-dismiss" type="button" onClick={handleDismissCompletionAlert}>
-              Dismiss
-            </button>
+            <SessionLabelField
+              value={completionSessionLabel}
+              onChange={setCompletionSessionLabel}
+              inputId="completionSessionLabelInput"
+              className="completion-session-label"
+            />
+            <div className="completion-alert-preview">
+              {buildBurstHistoryLabel({
+                title: selectedTask?.text?.trim() || "Focus session",
+                sessionLabel: completionSessionLabel
+              })}
+            </div>
+            <div className="completion-alert-actions">
+              <button className="completion-alert-dismiss" type="button" onClick={handleSaveCompletionSessionLabel}>
+                Save label
+              </button>
+              <button className="completion-alert-skip" type="button" onClick={handleDismissCompletionAlert}>
+                Skip
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

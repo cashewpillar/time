@@ -374,13 +374,39 @@ button {
   line-height: 1.45;
 }
 
+.completion-session-label {
+  gap: 8px;
+}
+
+.completion-alert-preview {
+  color: var(--white);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.completion-alert-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .completion-alert-dismiss {
-  justify-self: start;
   min-height: 38px;
   padding: 0 14px;
   border-radius: 999px;
   background: var(--button-bg);
   color: var(--button-text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.completion-alert-skip {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: var(--overlay-medium);
+  color: var(--white);
   font-size: 0.82rem;
   font-weight: 800;
 }
@@ -679,6 +705,36 @@ button {
 .manual-log-panel {
   display: grid;
   gap: 10px;
+}
+
+.session-label-field {
+  display: grid;
+  gap: 10px;
+}
+
+.session-label-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-label-chip {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--overlay-medium);
+  color: var(--white);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.session-label-chip.active {
+  background: var(--white);
+  color: var(--button-text);
+}
+
+.session-label-input {
+  min-height: 46px;
 }
 
 .timer-status {
@@ -1276,6 +1332,33 @@ button {
   margin-top: 10px;
   color: var(--text-faint);
   font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.burst-history-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.burst-history-item {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.burst-history-label {
+  color: var(--white);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.burst-history-meta {
+  color: var(--text-soft);
+  font-size: 0.72rem;
   font-weight: 700;
 }
 

@@ -28,6 +28,7 @@ export type Burst = {
   projectId: string;
   outcomeId: string | null;
   title: string;
+  sessionLabel: string;
   type: string;
   notes: string;
   agentEligible: boolean;
@@ -49,6 +50,7 @@ export type RecentTaskSlot = {
   id: string;
   taskId: string | null;
   taskText: string;
+  sessionLabel: string;
   taskType: string;
   taskNotes: string;
   agentEligible: boolean;
@@ -136,6 +138,7 @@ export type LocalCacheBurst = {
   kind: "task" | "recent";
   sourceId: string;
   title: string;
+  sessionLabel: string;
   type: string;
   notes: string;
   agentEligible: boolean;

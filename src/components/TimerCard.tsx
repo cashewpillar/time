@@ -5,6 +5,7 @@ import {
   formatTimerTime,
   parseManualDurationInput
 } from "../lib/time";
+import { SessionLabelField } from "./SessionLabelField";
 import type { RecentTaskSlot } from "../types/app";
 
 const MOBILE_TIMER_NOTE_KEY = "time-mobile-timer-note-dismissed-v1";
@@ -35,7 +36,7 @@ type TimerCardProps = {
   onPreviewManualDuration: (durationSeconds: number) => void;
   onSelectRecentSlot: (slot: RecentTaskSlot) => void;
   onClearRecentSlots: () => void;
-  onManualLog: (durationSeconds: number, slotId: string | null) => Promise<boolean>;
+  onManualLog: (durationSeconds: number, slotId: string | null, sessionLabel: string) => Promise<boolean>;
 };
 
 export function TimerCard({
@@ -88,6 +89,7 @@ export function TimerCard({
     return window.localStorage.getItem(CUSTOM_MANUAL_MINUTES_KEY) || "30";
   });
   const [selectedManualSlotId, setSelectedManualSlotId] = useState<string | null>(null);
+  const [sessionLabel, setSessionLabel] = useState("");
   const [isSubmittingManualLog, setIsSubmittingManualLog] = useState(false);
   const [showCustomTimerInput, setShowCustomTimerInput] = useState(() => !DURATION_PRESETS_MINUTES.includes(Math.round(targetSeconds / 60)));
   const [showCustomManualInput, setShowCustomManualInput] = useState(() => {
@@ -173,10 +175,12 @@ export function TimerCard({
     setCustomManualHoursDraft(String(Math.floor(totalMinutes / 60)));
     setCustomManualMinutesDraft(String(totalMinutes % 60));
     setShowCustomManualInput(!DURATION_PRESETS_MINUTES.includes(totalMinutes));
+    setSessionLabel(selectedRecentSlot.sessionLabel);
   }, [selectedRecentSlot?.id, selectedRecentSlot?.lastDurationSeconds]);
 
   function applyRecentSlot(slot: RecentTaskSlot) {
     setSelectedManualSlotId(slot.id);
+    setSessionLabel(slot.sessionLabel);
     onSelectRecentSlot(slot);
     if (typeof slot.lastDurationSeconds === "number") {
       setManualDurationDraft(formatManualDuration(slot.lastDurationSeconds));
@@ -353,9 +357,12 @@ export function TimerCard({
 
     setIsSubmittingManualLog(true);
     try {
-      const didSave = await onManualLog(parsed, selectedManualSlotId);
+      const didSave = await onManualLog(parsed, selectedManualSlotId, sessionLabel);
       if (didSave && !showCustomManualInput) {
         setManualDurationDraft("00:30");
+      }
+      if (didSave) {
+        setSessionLabel("");
       }
     } finally {
       setIsSubmittingManualLog(false);
@@ -615,7 +622,7 @@ export function TimerCard({
                     }}
                     onClick={() => applyRecentSlot(slot)}
                   >
-                    <span>{slot.taskText}</span>
+                    <span>{slot.sessionLabel ? `${slot.taskText} -> ${slot.sessionLabel}` : slot.taskText}</span>
                     <span>
                       {slot.workspaceName} / {slot.projectName}
                       {slot.lastDurationSeconds ? ` / ${formatManualDuration(slot.lastDurationSeconds)}` : ""}
@@ -626,6 +633,12 @@ export function TimerCard({
               </div>
             </div>
           ) : null}
+
+          <SessionLabelField
+            value={sessionLabel}
+            onChange={setSessionLabel}
+            inputId="manualSessionLabelInput"
+          />
 
           <div className="timer-actions manual-actions">
             <button

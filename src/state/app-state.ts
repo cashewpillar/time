@@ -50,7 +50,8 @@ export type AppAction =
   | { type: "delete-task"; taskId: string }
   | { type: "clear-completed" }
   | { type: "clear-recent-task-slots" }
-  | { type: "log-manual-entry"; slot: RecentTaskSlot; durationSeconds: number }
+  | { type: "log-manual-entry"; slot: RecentTaskSlot; durationSeconds: number; sessionLabel: string }
+  | { type: "set-burst-session-label"; burstId: string; sessionLabel: string }
   | { type: "restore-recent-task"; slot: RecentTaskSlot; now: number }
   | { type: "set-status"; status: string };
 
@@ -297,6 +298,7 @@ export function getRecentTaskSlots(state: AppState): RecentTaskSlot[] {
         id: burst.id,
         taskId: burst.outcomeId,
         taskText: burst.title,
+        sessionLabel: burst.sessionLabel,
         taskType: burst.type,
         taskNotes: burst.notes,
         agentEligible: burst.agentEligible,
@@ -426,6 +428,7 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
           projectId,
           outcomeId,
           title: task.text,
+          sessionLabel: "",
           type: typeof task.type === "string" ? task.type : "",
           notes: typeof task.notes === "string" ? task.notes : "",
           agentEligible: Boolean(task.agentEligible),
@@ -456,6 +459,7 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
       projectId: slot.projectId,
       outcomeId,
       title: slot.taskText,
+      sessionLabel: slot.sessionLabel,
       type: slot.taskType,
       notes: slot.taskNotes,
       agentEligible: slot.agentEligible,
@@ -517,6 +521,7 @@ function deserializeLocalCache(cache: LocalCache): Partial<AppState> {
     projectId: burst.projectId,
     outcomeId: burst.outcomeId,
     title: burst.title,
+    sessionLabel: burst.sessionLabel,
     type: burst.type,
     notes: burst.notes,
     agentEligible: burst.agentEligible,
@@ -610,6 +615,7 @@ function normalizeBursts(input: unknown): Burst[] {
       projectId: candidate.projectId,
       outcomeId: typeof candidate.outcomeId === "string" ? candidate.outcomeId : null,
       title: candidate.title.trim(),
+      sessionLabel: typeof candidate.sessionLabel === "string" ? candidate.sessionLabel.trim() : "",
       type: typeof candidate.type === "string" ? candidate.type.trim() : "",
       notes: typeof candidate.notes === "string" ? candidate.notes : "",
       agentEligible: Boolean(candidate.agentEligible),
@@ -684,6 +690,7 @@ function normalizeRecentTaskSlots(input: unknown): RecentTaskSlot[] {
       id: typeof candidate.id === "string" ? candidate.id : `recent-task-slot-${index}-${candidate.loggedAt}`,
       taskId: typeof candidate.taskId === "string" ? candidate.taskId : null,
       taskText: candidate.taskText.trim(),
+      sessionLabel: typeof candidate.sessionLabel === "string" ? candidate.sessionLabel.trim() : "",
       taskType: typeof candidate.taskType === "string" ? candidate.taskType.trim() : "",
       taskNotes: typeof candidate.taskNotes === "string" ? candidate.taskNotes : "",
       agentEligible: Boolean(candidate.agentEligible),
@@ -754,6 +761,12 @@ function deriveOutcomeTitle(value: string): string {
   return trimmed;
 }
 
+export function buildBurstHistoryLabel(burst: Pick<Burst, "title" | "sessionLabel">): string {
+  const taskTitle = burst.title.trim();
+  const sessionLabel = burst.sessionLabel.trim();
+  return sessionLabel ? `${taskTitle} -> ${sessionLabel}` : taskTitle;
+}
+
 function buildOutcomeKey(workspaceId: string, projectId: string, outcomeTitle: string): string {
   return `${workspaceId}::${projectId}::${outcomeTitle.trim().toLowerCase()}`;
 }
@@ -764,7 +777,11 @@ function mergeRecentBurstId(state: AppState, nextBurstId: string): string[] {
   const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
   const remaining = state.recentBurstIds.filter((burstId) => {
     const burst = state.bursts.find((entry) => entry.id === burstId);
-    return Boolean(burst && burst.loggedAt >= cutoff && burst.title.trim().toLowerCase() !== nextBurst.title.trim().toLowerCase());
+    return Boolean(
+      burst
+      && burst.loggedAt >= cutoff
+      && buildBurstHistoryLabel(burst).trim().toLowerCase() !== buildBurstHistoryLabel(nextBurst).trim().toLowerCase()
+    );
   });
   return [nextBurstId, ...remaining];
 }
@@ -786,6 +803,7 @@ function buildRecentBurstFromState(state: AppState, loggedAt: number): Burst | n
     projectId: project.id,
     outcomeId: outcome.id,
     title: outcome.title,
+    sessionLabel: "",
     type: outcome.type,
     notes: outcome.notes,
     agentEligible: outcome.agentEligible,
@@ -967,7 +985,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, done: false }];
       const nextBursts = state.editingOutcomeId
         ? state.bursts.map((burst) => burst.outcomeId === state.editingOutcomeId && burst.source === "task" ? { ...burst, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible } : burst)
-        : [...state.bursts, { id: `burst-task-${outcomeId}`, workspaceId: workspace.id, projectId: project.id, outcomeId, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, lastDurationSeconds: null, loggedAt: 0, source: "task" }];
+        : [...state.bursts, { id: `burst-task-${outcomeId}`, workspaceId: workspace.id, projectId: project.id, outcomeId, title: action.draft.text, sessionLabel: "", type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, lastDurationSeconds: null, loggedAt: 0, source: "task" }];
       return normalizeState({
         ...state,
         outcomes: nextOutcomes,
@@ -1019,6 +1037,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         projectId: action.slot.projectId,
         outcomeId: action.slot.taskId,
         title: action.slot.taskText,
+        sessionLabel: action.sessionLabel.trim(),
         type: action.slot.taskType,
         notes: action.slot.taskNotes,
         agentEligible: action.slot.agentEligible,
@@ -1033,6 +1052,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         status: `Logged ${formatManualDuration(action.durationSeconds)} for ${action.slot.taskText}.`
       });
     }
+    case "set-burst-session-label":
+      return normalizeState({
+        ...state,
+        bursts: state.bursts.map((burst) => burst.id === action.burstId ? { ...burst, sessionLabel: action.sessionLabel.trim() } : burst),
+        status: action.sessionLabel.trim() ? "Session label saved." : "Session label cleared."
+      });
     case "clear-recent-task-slots":
       return normalizeState({
         ...state,

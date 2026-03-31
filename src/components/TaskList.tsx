@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { TaskComposer } from "./TaskComposer";
 import { formatManualDuration } from "../lib/time";
+import { buildBurstHistoryLabel } from "../state/app-state";
 import type { Burst, Outcome, Project, TaskDraft } from "../types/app";
 
 type TaskListProps = {
@@ -140,14 +141,28 @@ export function TaskList({
                 <span className="burst-summary-pill">{trackedSeconds ? formatManualDuration(trackedSeconds) : "00:00"} tracked</span>
               </div>
               {recentBursts.length ? (
-                <div className={`burst-timeline${isSelected ? " selected" : ""}`}>
-                  {recentBursts.map((burst) => (
-                    <div key={burst.id} className="burst-pill">
-                      <span className="burst-pill-duration">{burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"}</span>
-                      <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
+                <>
+                  <div className={`burst-timeline${isSelected ? " selected" : ""}`}>
+                    {recentBursts.map((burst) => (
+                      <div key={burst.id} className="burst-pill">
+                        <span className="burst-pill-duration">{burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"}</span>
+                        <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {isSelected ? (
+                    <div className="burst-history-list">
+                      {recentBursts.map((burst) => (
+                        <div key={`${burst.id}-history`} className="burst-history-item">
+                          <div className="burst-history-label">{buildBurstHistoryLabel(burst)}</div>
+                          <div className="burst-history-meta">
+                            {burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"} • {formatBurstTimestamp(burst.loggedAt)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  ) : null}
+                </>
               ) : (
                 <div className="burst-empty">No bursts yet. Start the timer or log time to build history.</div>
               )}
