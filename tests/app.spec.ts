@@ -98,7 +98,8 @@ test("outcome form supports built-in types, custom types, AI eligibility, and ed
   });
 
   await expect(page.locator(".task-name")).toContainText("Build onboarding flow");
-  await expect(page.locator(".task-badge")).toContainText(["development", "AI Agent OK"]);
+  await expect(page.locator(".burst-summary-pill-type")).toContainText("development");
+  await expect(page.locator(".task-badge")).toContainText("AI Agent OK");
   await expect(page.locator(".task-notes-copy")).toContainText("Implement the happy path first.");
 
   await app.editFirstOutcome({
@@ -108,8 +109,8 @@ test("outcome form supports built-in types, custom types, AI eligibility, and ed
     aiEligible: false
   });
 
-  await expect(page.locator(".task-badge")).toContainText("research");
-  await expect(page.locator(".task-badges")).not.toContainText("AI Agent OK");
+  await expect(page.locator(".burst-summary-pill-type")).toContainText("research");
+  await expect(page.locator(".task-badge")).toHaveCount(0);
   await expect(page.locator(".task-notes-copy")).toContainText("Investigate implementation options.");
 
   await app.openAddOutcomeForm();

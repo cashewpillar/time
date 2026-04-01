@@ -203,8 +203,30 @@ button {
 
 .topbar {
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   padding: 2px 2px 14px;
   border-bottom: 1px solid var(--line);
+}
+
+.sync-status-trigger {
+  flex-shrink: 0;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--overlay-medium);
+  color: var(--header-title);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sync-status-trigger.error {
+  background: rgba(255, 211, 211, 0.18);
+  color: var(--danger);
 }
 
 .workspace-trigger {
@@ -325,6 +347,96 @@ button {
   margin: 14px auto 0;
   display: grid;
   gap: 12px;
+}
+
+.sync-info-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.sync-info-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--backdrop);
+}
+
+.sync-info-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 460px);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-strong);
+}
+
+.sync-info-title {
+  color: var(--white);
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sync-info-note {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.sync-info-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.sync-info-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sync-info-row-stack {
+  display: grid;
+}
+
+.sync-info-label {
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sync-info-value {
+  color: var(--white);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+  word-break: break-word;
+}
+
+.sync-info-value.error {
+  color: var(--danger);
+}
+
+.sync-info-error-copy {
+  margin-top: 6px;
+  text-align: left;
+  line-height: 1.45;
+}
+
+.sync-info-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .completion-alert-modal {

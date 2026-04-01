@@ -24,7 +24,7 @@ const THEME_STORAGE_KEY = "time-theme";
 type ThemeName = "blue" | "green" | "sakura";
 
 function App() {
-  const { state, dispatch } = usePersistentAppState();
+  const { state, dispatch, syncInfo, syncNow, pullFromRemote } = usePersistentAppState();
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const timerCardRef = useRef<HTMLElement | null>(null);
@@ -35,6 +35,7 @@ function App() {
   const [isCompletionAlertVisible, setIsCompletionAlertVisible] = useState(false);
   const [completionBurstId, setCompletionBurstId] = useState<string | null>(null);
   const [completionSessionLabel, setCompletionSessionLabel] = useState("");
+  const [isSyncInfoVisible, setIsSyncInfoVisible] = useState(false);
   const [theme, setTheme] = useState<ThemeName>(() => {
     if (typeof window === "undefined") return "blue";
 
@@ -287,6 +288,16 @@ function App() {
     handleDismissCompletionAlert();
   }
 
+  const syncStatusLabel = syncInfo.status === "disabled"
+    ? "Local only"
+    : syncInfo.status === "connecting"
+      ? "Connecting"
+    : syncInfo.status === "syncing"
+      ? "Syncing"
+      : syncInfo.status === "error"
+        ? "Sync error"
+          : "Connected";
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -303,6 +314,13 @@ function App() {
             onCreate={() => dispatch({ type: "create-workspace", now: Date.now() })}
           />
         </div>
+        <button
+          className={`sync-status-trigger${syncInfo.status === "error" ? " error" : ""}`}
+          type="button"
+          onClick={() => setIsSyncInfoVisible(true)}
+        >
+          {syncStatusLabel}
+        </button>
       </header>
 
       <main className="main">
@@ -435,6 +453,62 @@ function App() {
               </button>
               <button className="completion-alert-skip" type="button" onClick={handleDismissCompletionAlert}>
                 Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isSyncInfoVisible ? (
+        <div
+          className="sync-info-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="syncInfoTitle"
+        >
+          <button
+            className="sync-info-backdrop"
+            type="button"
+            aria-label="Dismiss sync info"
+            onClick={() => setIsSyncInfoVisible(false)}
+          ></button>
+
+          <div className="sync-info-card">
+            <div className="sync-info-title" id="syncInfoTitle">Supabase Sync</div>
+            <div className="sync-info-note">
+              Auto-upload runs 10 seconds after durable changes. Downloads only happen when you trigger them here.
+            </div>
+            <div className="sync-info-grid">
+              <div className="sync-info-row">
+                <span className="sync-info-label">Status</span>
+                <span className={`sync-info-value${syncInfo.status === "error" ? " error" : ""}`}>{syncStatusLabel}</span>
+              </div>
+              <div className="sync-info-row">
+                <span className="sync-info-label">Instance</span>
+                <span className="sync-info-value">{syncInfo.instanceId || "Not set"}</span>
+              </div>
+              <div className="sync-info-row">
+                <span className="sync-info-label">Last sync</span>
+                <span className="sync-info-value">
+                  {syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleString() : "Not yet"}
+                </span>
+              </div>
+              <div className="sync-info-row sync-info-row-stack">
+                <span className="sync-info-label">Last error</span>
+                <span className={`sync-info-value sync-info-error-copy${syncInfo.lastError ? " error" : ""}`}>
+                  {syncInfo.lastError || "None"}
+                </span>
+              </div>
+            </div>
+            <div className="sync-info-actions">
+              <button className="completion-alert-skip" type="button" onClick={() => void pullFromRemote()}>
+                Download from Supabase
+              </button>
+              <button className="completion-alert-skip" type="button" onClick={() => void syncNow()}>
+                Upload to Supabase
+              </button>
+              <button className="completion-alert-dismiss" type="button" onClick={() => setIsSyncInfoVisible(false)}>
+                Close
               </button>
             </div>
           </div>
