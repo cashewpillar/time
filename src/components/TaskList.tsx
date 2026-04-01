@@ -164,13 +164,13 @@ export function TaskList({
           ) : (
             <>
               <div className="task-name">{outcome.title}</div>
-              {(outcome.type || outcome.agentEligible) ? (
+              {outcome.agentEligible ? (
                 <div className="task-badges">
-                  {outcome.type ? <span className="task-badge">{outcome.type}</span> : null}
                   {outcome.agentEligible ? <span className="task-badge">AI Agent OK</span> : null}
                 </div>
               ) : null}
               <div className="burst-summary">
+                {outcome.type ? <span className="burst-summary-pill burst-summary-pill-type">{outcome.type}</span> : null}
                 <span className="burst-summary-pill">{outcomeBursts.length} burst{outcomeBursts.length === 1 ? "" : "s"}</span>
                 <span className="burst-summary-pill">{trackedSeconds ? formatManualDuration(trackedSeconds) : "00:00"} tracked</span>
               </div>

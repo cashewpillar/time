@@ -1324,6 +1324,11 @@ button {
   text-transform: uppercase;
 }
 
+.burst-summary-pill-type {
+  background: var(--overlay-medium);
+  color: var(--white);
+}
+
 .burst-timeline {
   display: flex;
   flex-wrap: wrap;
