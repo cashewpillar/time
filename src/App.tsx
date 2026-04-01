@@ -10,12 +10,12 @@ import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { usePersistentAppState } from "./hooks/usePersistentAppState";
 import {
   getActiveProject,
-  getSelectedTask,
+  getSelectedOutcome,
   getActiveWorkspace,
   buildBurstHistoryLabel,
-  getEditingTask,
+  getEditingOutcome,
   getOutcomesForProjectId,
-  getTaskTypeOptions,
+  getOutcomeTypeOptions,
   getVisibleProjects
 } from "./state/app-state";
 
@@ -44,18 +44,18 @@ function App() {
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
-  const selectedTask = useMemo(() => getSelectedTask(state), [state]);
-  const editingTask = useMemo(() => getEditingTask(state), [state]);
+  const selectedOutcome = useMemo(() => getSelectedOutcome(state), [state]);
+  const editingOutcome = useMemo(() => getEditingOutcome(state), [state]);
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace, state), [activeWorkspace, state]);
   const projectOutcomes = useMemo(() => activeProject ? getOutcomesForProjectId(state, activeProject.id) : [], [activeProject, state]);
-  const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
-  const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
-  const shouldExpandTasksCard = isTaskQueueExpanded || state.isTaskFormOpen;
-  const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedTask);
-  const selectedTaskContext = selectedTask && activeWorkspace && activeProject
+  const outcomeTypeOptions = useMemo(() => getOutcomeTypeOptions(state.customOutcomeTypes), [state.customOutcomeTypes]);
+  const isOutcomeComposerOpen = state.isOutcomeFormOpen && !editingOutcome;
+  const shouldExpandTasksCard = isTaskQueueExpanded || state.isOutcomeFormOpen;
+  const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedOutcome);
+  const selectedOutcomeContext = selectedOutcome && activeWorkspace && activeProject
     ? `${activeWorkspace.name} / ${activeProject.name}`
     : null;
-  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current task|Session complete|Timer (started|paused|reset)|Timer target set|Time spent set)/.test(state.status)
+  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current outcome|Session complete|Timer (started|paused|reset)|Timer target set|Time spent set)/.test(state.status)
     ? state.status
     : null;
 
@@ -93,10 +93,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const taskName = selectedTask?.text?.trim() || "No task selected";
+    const taskName = selectedOutcome?.title?.trim() || "No outcome selected";
     const projectName = activeProject?.name || "Project";
     document.title = `${taskName} - ${projectName}`;
-  }, [activeProject?.name, selectedTask?.text]);
+  }, [activeProject?.name, selectedOutcome?.title]);
 
   useEffect(() => {
     if (!state.isRunning) return undefined;
@@ -111,19 +111,19 @@ function App() {
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
       const latestBurst = state.bursts
-        .filter((burst) => burst.source === "recent" && burst.outcomeId === state.activeOutcomeId)
+        .filter((burst) => burst.outcomeId === state.activeOutcomeId)
         .sort((left, right) => right.loggedAt - left.loggedAt)[0] || null;
       startTimerCompleteAlarm();
       setIsCompletionAlertVisible(true);
       setCompletionBurstId(latestBurst?.id || null);
       setCompletionSessionLabel(latestBurst?.sessionLabel || "");
       showTimerCompleteNotification(
-        selectedTask?.text?.trim() || "Focus session",
+        selectedOutcome?.title?.trim() || "Focus session",
         activeProject?.name || "Project"
       );
     }
     previousCompletedSessionsRef.current = state.completedSessions;
-  }, [activeProject?.name, selectedTask, state.completedSessions]);
+  }, [activeProject?.name, selectedOutcome, state.completedSessions]);
 
   useEffect(() => () => {
     stopTimerCompleteAlarm();
@@ -166,7 +166,7 @@ function App() {
       observer.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, [state.targetSeconds, selectedTask?.text, state.isRunning, state.elapsedSeconds]);
+  }, [state.targetSeconds, selectedOutcome?.title, state.isRunning, state.elapsedSeconds]);
 
   function promptForWorkspaceRename(workspaceId: string) {
     const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
@@ -230,13 +230,13 @@ function App() {
     setCompletionSessionLabel("");
   }
 
-  function handleSaveTask(draft: { text: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
+  function handleSaveOutcome(draft: { title: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
     if (!activeProject) {
       dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
     }
 
-    if (!draft.text.trim()) {
+    if (!draft.title.trim()) {
       dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
     }
@@ -249,46 +249,21 @@ function App() {
     const now = Date.now();
 
     dispatch({
-      type: "save-task",
+      type: "save-outcome",
       draft,
       customType,
       now
     });
   }
 
-  async function handleManualLog(durationSeconds: number, slotId: string | null, sessionLabel: string): Promise<boolean> {
-    const activeSlot = selectedTask && activeWorkspace && activeProject
-      ? {
-          id: `recent-task-slot-${Date.now()}`,
-        taskId: selectedTask.id,
-        taskText: selectedTask.text.trim(),
-        sessionLabel: "",
-        taskType: selectedTask.type.trim(),
-        taskNotes: selectedTask.notes,
-        agentEligible: selectedTask.agentEligible,
-          workspaceId: activeWorkspace.id,
-          workspaceName: activeWorkspace.name,
-          projectId: activeProject.id,
-          projectName: activeProject.name,
-          lastDurationSeconds: null,
-          loggedAt: Date.now()
-        }
-      : null;
-
-    if (!activeSlot) {
+  async function handleManualLog(durationSeconds: number, _slotId: string | null, sessionLabel: string): Promise<boolean> {
+    if (!selectedOutcome || !activeWorkspace || !activeProject) {
       dispatch({ type: "set-status", status: "Pick a current outcome first." });
       return false;
     }
 
     const loggedAt = Date.now();
-    const nextSlot = {
-      ...activeSlot,
-      id: `recent-task-slot-${loggedAt}`,
-      lastDurationSeconds: durationSeconds,
-      loggedAt
-    };
-
-    dispatch({ type: "log-manual-entry", slot: nextSlot, durationSeconds, sessionLabel });
+    dispatch({ type: "log-manual-entry", durationSeconds, sessionLabel, loggedAt });
     return true;
   }
 
@@ -355,20 +330,20 @@ function App() {
             project={activeProject}
             outcomes={projectOutcomes}
             bursts={state.bursts}
-            editingTask={editingTask}
-            activeTaskId={state.activeOutcomeId}
-            taskTypeOptions={taskTypeOptions}
-            isComposerOpen={isTaskComposerOpen}
+            editingOutcome={editingOutcome}
+            activeOutcomeId={state.activeOutcomeId}
+            outcomeTypeOptions={outcomeTypeOptions}
+            isComposerOpen={isOutcomeComposerOpen}
             onQueueExpandedChange={setIsTaskQueueExpanded}
-            onSelectTask={(taskId) => dispatch({ type: "select-task", taskId })}
-            onEditTask={(taskId) => dispatch({ type: "edit-task", taskId })}
-            onToggleTask={(taskId) => dispatch({ type: "toggle-task", taskId })}
-            onDeleteTask={(taskId) => dispatch({ type: "delete-task", taskId })}
+            onSelectOutcome={(outcomeId) => dispatch({ type: "select-outcome", outcomeId })}
+            onEditOutcome={(outcomeId) => dispatch({ type: "edit-outcome", outcomeId })}
+            onToggleOutcome={(outcomeId) => dispatch({ type: "toggle-outcome", outcomeId })}
+            onDeleteOutcome={(outcomeId) => dispatch({ type: "delete-outcome", outcomeId })}
             onClearCompleted={() => dispatch({ type: "clear-completed" })}
-            onOpenComposer={() => dispatch({ type: "open-task-form" })}
-            onCancelEdit={() => dispatch({ type: "close-task-form" })}
-            onCancelComposer={() => dispatch({ type: "close-task-form" })}
-            onSaveTask={handleSaveTask}
+            onOpenComposer={() => dispatch({ type: "open-outcome-form" })}
+            onCancelEdit={() => dispatch({ type: "close-outcome-form" })}
+            onCancelComposer={() => dispatch({ type: "close-outcome-form" })}
+            onSaveOutcome={handleSaveOutcome}
           />
         </section>
 
@@ -377,8 +352,8 @@ function App() {
             elapsedSeconds={state.elapsedSeconds}
             targetSeconds={state.targetSeconds}
             isRunning={state.isRunning}
-            selectedTaskName={selectedTask?.text || null}
-            selectedTaskContext={selectedTaskContext}
+            selectedOutcomeName={selectedOutcome?.title || null}
+            selectedOutcomeContext={selectedOutcomeContext}
             timerStatusMessage={timerStatusMessage}
             shouldHighlightStart={shouldHighlightTimerStart}
             onToggleTimer={handleToggleTimer}
@@ -439,7 +414,7 @@ function App() {
             <div className="completion-alert-copy">
               <div className="completion-alert-title" id="completionAlertTitle">Timer complete</div>
               <div className="completion-alert-body" id="completionAlertBody">
-                {selectedTask?.text?.trim() || "Focus session"} is done.
+                {selectedOutcome?.title?.trim() || "Focus session"} is done.
               </div>
             </div>
             <SessionLabelField
@@ -450,7 +425,7 @@ function App() {
             />
             <div className="completion-alert-preview">
               {buildBurstHistoryLabel({
-                title: selectedTask?.text?.trim() || "Focus session",
+                title: selectedOutcome?.title?.trim() || "Focus session",
                 sessionLabel: completionSessionLabel
               })}
             </div>

@@ -1379,9 +1379,53 @@ button {
 }
 
 .burst-history-list {
+  --burst-history-fade-color: var(--surface);
+  position: relative;
   display: grid;
   gap: 8px;
   margin-top: 10px;
+  max-height: 224px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.burst-history-list::before,
+.burst-history-list::after {
+  content: "";
+  position: sticky;
+  left: 0;
+  right: 4px;
+  height: 20px;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.burst-history-list::before {
+  top: 0;
+  margin-bottom: -20px;
+  background: linear-gradient(180deg, var(--burst-history-fade-color), transparent);
+}
+
+.burst-history-list::after {
+  bottom: 0;
+  margin-top: -20px;
+  background: linear-gradient(180deg, transparent, var(--burst-history-fade-color));
+}
+
+.burst-history-list.fade-start::before {
+  opacity: 1;
+}
+
+.burst-history-list.fade-end::after {
+  opacity: 1;
+}
+
+.burst-history-list::-webkit-scrollbar {
+  display: none;
 }
 
 .burst-history-item {

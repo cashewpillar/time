@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
-type TaskInput = {
+type OutcomeInput = {
   name: string;
   type: string;
   notes?: string;
@@ -8,7 +8,7 @@ type TaskInput = {
   customType?: string;
 };
 
-type TaskEditInput = {
+type OutcomeEditInput = {
   type?: string;
   notes?: string;
   aiEligible?: boolean;
@@ -22,11 +22,11 @@ export class AppPage {
   readonly projectTabs: Locator;
   readonly projectMenuTrigger: Locator;
   readonly projectDropdown: Locator;
-  readonly addTaskButton: Locator;
-  readonly taskNameInput: Locator;
-  readonly taskTypeSelect: Locator;
-  readonly customTaskTypeInput: Locator;
-  readonly taskNotesInput: Locator;
+  readonly addOutcomeButton: Locator;
+  readonly outcomeNameInput: Locator;
+  readonly outcomeTypeSelect: Locator;
+  readonly customOutcomeTypeInput: Locator;
+  readonly outcomeNotesInput: Locator;
   readonly aiEligibleCheckbox: Locator;
   readonly timerModeLogTime: Locator;
   readonly timerModeLiveTimer: Locator;
@@ -43,11 +43,11 @@ export class AppPage {
     this.projectTabs = page.locator("#projectTabs .project-tab");
     this.projectMenuTrigger = page.locator("#projectMenuTrigger");
     this.projectDropdown = page.locator("#projectDropdown");
-    this.addTaskButton = page.getByRole("button", { name: /add task/i });
-    this.taskNameInput = page.getByLabel("Task name");
-    this.taskTypeSelect = page.getByLabel("Task type", { exact: true });
-    this.customTaskTypeInput = page.getByLabel("Add a task type", { exact: true });
-    this.taskNotesInput = page.getByLabel("Task notes");
+    this.addOutcomeButton = page.getByRole("button", { name: /add outcome/i });
+    this.outcomeNameInput = page.getByLabel("Outcome name");
+    this.outcomeTypeSelect = page.getByLabel("Outcome type", { exact: true });
+    this.customOutcomeTypeInput = page.getByLabel("Add an outcome type", { exact: true });
+    this.outcomeNotesInput = page.getByLabel("Outcome notes");
     this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
     this.timerModeLiveTimer = page.getByRole("tab", { name: /live timer/i });
     this.timerModeLogTime = page.getByRole("tab", { name: /log time|time logger/i });
@@ -115,45 +115,45 @@ export class AppPage {
     await this.projectDropdown.getByRole("button", { name, exact: true }).click();
   }
 
-  async openAddTaskForm(): Promise<void> {
-    await this.addTaskButton.click();
+  async openAddOutcomeForm(): Promise<void> {
+    await this.addOutcomeButton.click();
   }
 
-  async createTask({ name, type, notes, aiEligible = false, customType }: TaskInput): Promise<void> {
-    await this.openAddTaskForm();
-    await this.taskNameInput.fill(name);
-    await this.taskTypeSelect.selectOption(type);
+  async createOutcome({ name, type, notes, aiEligible = false, customType }: OutcomeInput): Promise<void> {
+    await this.openAddOutcomeForm();
+    await this.outcomeNameInput.fill(name);
+    await this.outcomeTypeSelect.selectOption(type);
 
     if (type === "__custom__" && customType) {
-      await expect(this.customTaskTypeInput).toBeVisible();
-      await this.customTaskTypeInput.fill(customType);
+      await expect(this.customOutcomeTypeInput).toBeVisible();
+      await this.customOutcomeTypeInput.fill(customType);
     }
 
     if (notes) {
-      await this.taskNotesInput.fill(notes);
+      await this.outcomeNotesInput.fill(notes);
     }
 
     if (aiEligible) {
       await this.aiEligibleCheckbox.check();
     }
 
-    await this.page.getByRole("button", { name: /save task/i }).click();
+    await this.page.getByRole("button", { name: /save outcome/i }).click();
   }
 
-  async editFirstTask({ type, notes, aiEligible, customType }: TaskEditInput): Promise<void> {
-    await this.page.getByRole("button", { name: /edit task/i }).click();
+  async editFirstOutcome({ type, notes, aiEligible, customType }: OutcomeEditInput): Promise<void> {
+    await this.page.getByRole("button", { name: /edit outcome/i }).click();
 
     if (type) {
-      await this.taskTypeSelect.selectOption(type);
+      await this.outcomeTypeSelect.selectOption(type);
     }
 
     if (type === "__custom__" && customType) {
-      await expect(this.customTaskTypeInput).toBeVisible();
-      await this.customTaskTypeInput.fill(customType);
+      await expect(this.customOutcomeTypeInput).toBeVisible();
+      await this.customOutcomeTypeInput.fill(customType);
     }
 
     if (typeof notes === "string") {
-      await this.taskNotesInput.fill(notes);
+      await this.outcomeNotesInput.fill(notes);
     }
 
     if (typeof aiEligible === "boolean") {
@@ -167,7 +167,7 @@ export class AppPage {
     await this.page.getByRole("button", { name: /save changes/i }).click();
   }
 
-  async selectTask(name: string): Promise<void> {
+  async selectOutcome(name: string): Promise<void> {
     await this.page.locator(".task-copy").filter({ hasText: name }).first().click();
   }
 
@@ -192,9 +192,5 @@ export class AppPage {
   async showCustomManualInput(): Promise<void> {
     await this.timerModeLogTime.click();
     await this.manualDurationPresets.getByRole("button", { name: "Custom", exact: true }).click();
-  }
-
-  recentSlot(name: RegExp): Locator {
-    return this.page.getByRole("button", { name });
   }
 }

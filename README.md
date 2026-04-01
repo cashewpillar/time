@@ -19,6 +19,6 @@ npm run build
 
 ## Persistence
 
-Projects, workspaces, tasks, timer progress, and recent task slots are saved in browser `localStorage` on the current device.
+Projects, workspaces, outcomes, session history, and timer progress are saved in browser `localStorage` on the current device.
 
 This branch intentionally removes the old Notion integration so the app can serve as a simpler base for the upcoming Supabase migration.

@@ -1,18 +1,15 @@
 import type {
   AppState,
   Burst,
+  LegacyLocalCache,
   LegacyPersistedProject,
   LegacyPersistedState,
   LegacyPersistedTask,
   LegacyPersistedWorkspace,
   LocalCache,
-  LocalCacheBurst,
-  LocalCacheOutcome,
   Outcome,
+  OutcomeDraft,
   Project,
-  RecentTaskSlot,
-  Task,
-  TaskDraft,
   Workspace
 } from "../types/app";
 import { formatManualDuration } from "../lib/time";
@@ -20,12 +17,11 @@ import { formatManualDuration } from "../lib/time";
 export const STORAGE_KEY = "workspace-two-cache-v3";
 export const LEGACY_STORAGE_KEY = "workspace-two-state-v2";
 export const DEFAULT_TARGET_SECONDS = 20 * 60;
-export const DEFAULT_TASK_TYPES = ["development", "design", "product"] as const;
-export const RECENT_TASK_SLOT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+export const DEFAULT_OUTCOME_TYPES = ["development", "design", "product"] as const;
 
 export type AppAction =
   | { type: "hydrate-state"; state: Partial<AppState>; status?: string }
-  | { type: "select-task"; taskId: string }
+  | { type: "select-outcome"; outcomeId: string }
   | { type: "toggle-workspace-menu" }
   | { type: "toggle-project-menu" }
   | { type: "close-menus" }
@@ -42,17 +38,15 @@ export type AppAction =
   | { type: "pause-timer" }
   | { type: "reset-timer" }
   | { type: "tick"; now: number }
-  | { type: "open-task-form" }
-  | { type: "close-task-form" }
-  | { type: "edit-task"; taskId: string }
-  | { type: "save-task"; draft: TaskDraft; customType: string; now: number }
-  | { type: "toggle-task"; taskId: string }
-  | { type: "delete-task"; taskId: string }
+  | { type: "open-outcome-form" }
+  | { type: "close-outcome-form" }
+  | { type: "edit-outcome"; outcomeId: string }
+  | { type: "save-outcome"; draft: OutcomeDraft; customType: string; now: number }
+  | { type: "toggle-outcome"; outcomeId: string }
+  | { type: "delete-outcome"; outcomeId: string }
   | { type: "clear-completed" }
-  | { type: "clear-recent-task-slots" }
-  | { type: "log-manual-entry"; slot: RecentTaskSlot; durationSeconds: number; sessionLabel: string }
+  | { type: "log-manual-entry"; durationSeconds: number; sessionLabel: string; loggedAt: number }
   | { type: "set-burst-session-label"; burstId: string; sessionLabel: string }
-  | { type: "restore-recent-task"; slot: RecentTaskSlot; now: number }
   | { type: "set-status"; status: string };
 
 export function defaultState(): AppState {
@@ -86,13 +80,12 @@ export function defaultState(): AppState {
     completedSessions: 0,
     lastTickAt: null,
     activeOutcomeId: null,
-    isTaskFormOpen: false,
+    isOutcomeFormOpen: false,
     editingOutcomeId: null,
     isWorkspaceMenuOpen: false,
     isProjectMenuOpen: false,
-    customTaskTypes: [],
-    recentBurstIds: [],
-    status: "Projects, workspaces, and timer progress are saved on this device.",
+    customOutcomeTypes: [],
+    status: "Projects, workspaces, outcomes, and timer progress are saved on this device.",
     workspaces,
     projects,
     outcomes: [],
@@ -104,21 +97,22 @@ export function loadStateFromStorageValue(input?: unknown): AppState {
   if (isLocalCache(input)) {
     return normalizeState(deserializeLocalCache(input));
   }
+  if (isLegacyLocalCache(input)) {
+    return normalizeState(deserializeLegacyLocalCache(input));
+  }
   return normalizeState(migrateLegacyState(input));
 }
 
 export function serializeStateForStorage(state: AppState): LocalCache {
   const cache: LocalCache = {
-    version: 3,
+    version: 4,
     workspaceIds: state.workspaces.map((workspace) => workspace.id),
     workspacesById: Object.fromEntries(state.workspaces.map((workspace) => [workspace.id, workspace])),
     projectIdsByWorkspaceId: {},
     projectsById: Object.fromEntries(state.projects.map((project) => [project.id, project])),
     outcomeIdsByProjectId: {},
-    outcomesById: {},
-    taskBurstIdsByProjectId: {},
-    burstsById: {},
-    recentBurstIds: [...state.recentBurstIds],
+    outcomesById: Object.fromEntries(state.outcomes.map((outcome) => [outcome.id, outcome])),
+    burstsById: Object.fromEntries(state.bursts.map((burst) => [burst.id, burst])),
     ui: {
       activeWorkspaceId: state.activeWorkspaceId,
       elapsedSeconds: state.elapsedSeconds,
@@ -127,11 +121,11 @@ export function serializeStateForStorage(state: AppState): LocalCache {
       completedSessions: state.completedSessions,
       lastTickAt: state.lastTickAt,
       activeOutcomeId: state.activeOutcomeId,
-      isTaskFormOpen: state.isTaskFormOpen,
+      isOutcomeFormOpen: state.isOutcomeFormOpen,
       editingOutcomeId: state.editingOutcomeId,
       isWorkspaceMenuOpen: state.isWorkspaceMenuOpen,
       isProjectMenuOpen: state.isProjectMenuOpen,
-      customTaskTypes: [...state.customTaskTypes],
+      customOutcomeTypes: [...state.customOutcomeTypes],
       status: state.status
     }
   };
@@ -142,31 +136,6 @@ export function serializeStateForStorage(state: AppState): LocalCache {
 
   for (const project of state.projects) {
     cache.outcomeIdsByProjectId[project.id] = getOutcomesForProjectId(state, project.id).map((outcome) => outcome.id);
-    cache.taskBurstIdsByProjectId[project.id] = state.bursts
-      .filter((burst) => burst.projectId === project.id && burst.source === "task")
-      .map((burst) => burst.id);
-  }
-
-  for (const outcome of state.outcomes) {
-    const sourceBurstIds = state.bursts
-      .filter((burst) => burst.outcomeId === outcome.id)
-      .map((burst) => burst.id);
-    cache.outcomesById[outcome.id] = {
-      ...outcome,
-      key: buildOutcomeKey(outcome.workspaceId, outcome.projectId, outcome.title),
-      sourceBurstIds
-    };
-  }
-
-  for (const burst of state.bursts) {
-    cache.burstsById[burst.id] = {
-      ...burst,
-      kind: burst.source,
-      sourceId: burst.id.replace(/^burst-(task|recent)-/, ""),
-      done: burst.source === "task"
-        ? Boolean(state.outcomes.find((outcome) => outcome.id === burst.outcomeId)?.done)
-        : false
-    };
   }
 
   return cache;
@@ -184,18 +153,15 @@ export function normalizeState(input?: Partial<AppState>): AppState {
     completedSessions: typeof input?.completedSessions === "number" && input.completedSessions >= 0 ? input.completedSessions : base.completedSessions,
     lastTickAt: typeof input?.lastTickAt === "number" ? input.lastTickAt : base.lastTickAt,
     activeOutcomeId: typeof input?.activeOutcomeId === "string" ? input.activeOutcomeId : base.activeOutcomeId,
-    isTaskFormOpen: typeof input?.isTaskFormOpen === "boolean" ? input.isTaskFormOpen : base.isTaskFormOpen,
+    isOutcomeFormOpen: typeof input?.isOutcomeFormOpen === "boolean" ? input.isOutcomeFormOpen : base.isOutcomeFormOpen,
     editingOutcomeId: typeof input?.editingOutcomeId === "string" ? input.editingOutcomeId : base.editingOutcomeId,
     isWorkspaceMenuOpen: typeof input?.isWorkspaceMenuOpen === "boolean" ? input.isWorkspaceMenuOpen : base.isWorkspaceMenuOpen,
     isProjectMenuOpen: typeof input?.isProjectMenuOpen === "boolean" ? input.isProjectMenuOpen : base.isProjectMenuOpen,
-    customTaskTypes: Array.isArray(input?.customTaskTypes)
-      ? input.customTaskTypes
+    customOutcomeTypes: Array.isArray(input?.customOutcomeTypes)
+      ? input.customOutcomeTypes
           .filter((type): type is string => typeof type === "string" && type.trim().length > 0)
           .map((type) => type.trim().toLowerCase())
-      : base.customTaskTypes,
-    recentBurstIds: Array.isArray(input?.recentBurstIds)
-      ? input.recentBurstIds.filter((id): id is string => typeof id === "string")
-      : base.recentBurstIds,
+      : base.customOutcomeTypes,
     status: typeof input?.status === "string" ? input.status : base.status,
     workspaces: normalizeWorkspaces(input?.workspaces),
     projects: normalizeProjects(input?.projects),
@@ -220,9 +186,6 @@ export function normalizeState(input?: Partial<AppState>): AppState {
   const activeProject = getActiveProject(next);
   next.activeOutcomeId = getDefaultActiveOutcomeId(next, activeProject?.id || null, next.activeOutcomeId);
 
-  next.recentBurstIds = next.recentBurstIds.filter((burstId) => next.bursts.some((burst) => burst.id === burstId));
-  next.bursts = next.bursts.filter((burst) => burst.source === "task" || next.recentBurstIds.includes(burst.id));
-
   if (next.isRunning && next.lastTickAt) {
     const now = Date.now();
     const elapsedSinceLastTick = Math.floor((now - next.lastTickAt) / 1000);
@@ -234,14 +197,13 @@ export function normalizeState(input?: Partial<AppState>): AppState {
 
   if (next.elapsedSeconds >= next.targetSeconds && next.isRunning) {
     const loggedAt = Date.now();
-    const completionBurst = buildRecentBurstFromState(next, loggedAt);
+    const completionBurst = buildLoggedBurstFromState(next, next.targetSeconds, "", loggedAt);
     next.elapsedSeconds = next.targetSeconds;
     next.isRunning = false;
     next.lastTickAt = null;
     next.completedSessions += 1;
     if (completionBurst) {
       next.bursts = upsertBurst(next.bursts, completionBurst);
-      next.recentBurstIds = mergeRecentBurstId(next, completionBurst.id);
     }
     next.status = "Session complete. Nice work.";
   }
@@ -274,42 +236,16 @@ export function getOutcomesForProjectId(state: AppState, projectId: string): Out
   return state.outcomes.filter((outcome) => outcome.projectId === projectId);
 }
 
-export function getEditingTask(state: AppState): Outcome | null {
+export function getEditingOutcome(state: AppState): Outcome | null {
   return state.outcomes.find((entry) => entry.id === state.editingOutcomeId) || null;
 }
 
-export function getSelectedTask(state: AppState): Task | null {
-  const outcome = state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
-  return outcome ? outcomeToTask(outcome) : null;
+export function getSelectedOutcome(state: AppState): Outcome | null {
+  return state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
 }
 
-export function getTaskTypeOptions(customTaskTypes: string[]): string[] {
-  return Array.from(new Set([...DEFAULT_TASK_TYPES, ...customTaskTypes]));
-}
-
-export function getRecentTaskSlots(state: AppState): RecentTaskSlot[] {
-  return state.recentBurstIds
-    .map((burstId) => state.bursts.find((burst) => burst.id === burstId) || null)
-    .filter((burst): burst is Burst => Boolean(burst && burst.source === "recent"))
-    .map((burst) => {
-      const workspaceName = state.workspaces.find((workspace) => workspace.id === burst.workspaceId)?.name || "Workspace";
-      const projectName = state.projects.find((project) => project.id === burst.projectId)?.name || "Project";
-      return {
-        id: burst.id,
-        taskId: burst.outcomeId,
-        taskText: burst.title,
-        sessionLabel: burst.sessionLabel,
-        taskType: burst.type,
-        taskNotes: burst.notes,
-        agentEligible: burst.agentEligible,
-        workspaceId: burst.workspaceId,
-        workspaceName,
-        projectId: burst.projectId,
-        projectName,
-        lastDurationSeconds: burst.lastDurationSeconds,
-        loggedAt: burst.loggedAt
-      };
-    });
+export function getOutcomeTypeOptions(customOutcomeTypes: string[]): string[] {
+  return Array.from(new Set([...DEFAULT_OUTCOME_TYPES, ...customOutcomeTypes]));
 }
 
 function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
@@ -335,9 +271,6 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
 
   const projects: Project[] = [];
   const outcomes: Outcome[] = [];
-  const bursts: Burst[] = [];
-  const recentBurstIds: string[] = [];
-  const outcomeIdsByKey = new Map<string, string>();
   const legacyTaskIdToOutcomeId = new Map<string, string>();
 
   function ensureOutcome(params: {
@@ -348,20 +281,16 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
     notes: string;
     agentEligible: boolean;
     done: boolean;
-    sourceId: string;
   }): string {
     const derivedTitle = deriveOutcomeTitle(params.title);
     const key = buildOutcomeKey(params.workspaceId, params.projectId, derivedTitle);
-    const existing = outcomeIdsByKey.get(key);
+    const existing = outcomes.find((outcome) => buildOutcomeKey(outcome.workspaceId, outcome.projectId, outcome.title) === key);
     if (existing) {
-      const outcome = outcomes.find((entry) => entry.id === existing);
-      if (outcome) {
-        if (!outcome.type && params.type.trim()) outcome.type = params.type.trim();
-        if (!outcome.notes && params.notes.trim()) outcome.notes = params.notes.trim();
-        outcome.agentEligible = outcome.agentEligible || params.agentEligible;
-        outcome.done = outcome.done && params.done;
-      }
-      return existing;
+      if (!existing.type && params.type.trim()) existing.type = params.type.trim();
+      if (!existing.notes && params.notes.trim()) existing.notes = params.notes.trim();
+      existing.agentEligible = existing.agentEligible || params.agentEligible;
+      existing.done = existing.done && params.done;
+      return existing.id;
     }
 
     const outcomeId = `outcome-${params.projectId}-${outcomes.length + 1}`;
@@ -375,7 +304,6 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
       agentEligible: params.agentEligible,
       done: params.done
     });
-    outcomeIdsByKey.set(key, outcomeId);
     return outcomeId;
   }
 
@@ -417,57 +345,11 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
           type: typeof task.type === "string" ? task.type : "",
           notes: typeof task.notes === "string" ? task.notes : "",
           agentEligible: Boolean(task.agentEligible),
-          done: Boolean(task.done),
-          sourceId
+          done: Boolean(task.done)
         });
-
         legacyTaskIdToOutcomeId.set(sourceId, outcomeId);
-        bursts.push({
-          id: `burst-task-${sourceId}`,
-          workspaceId: workspace.id,
-          projectId,
-          outcomeId,
-          title: task.text,
-          sessionLabel: "",
-          type: typeof task.type === "string" ? task.type : "",
-          notes: typeof task.notes === "string" ? task.notes : "",
-          agentEligible: Boolean(task.agentEligible),
-          lastDurationSeconds: null,
-          loggedAt: 0,
-          source: "task"
-        });
       });
     }
-  }
-
-  const recentTaskSlots = normalizeRecentTaskSlots(legacy.recentTaskSlots);
-  for (const slot of recentTaskSlots) {
-    const outcomeId = ensureOutcome({
-      workspaceId: slot.workspaceId,
-      projectId: slot.projectId,
-      title: slot.taskText,
-      type: slot.taskType,
-      notes: slot.taskNotes,
-      agentEligible: slot.agentEligible,
-      done: false,
-      sourceId: slot.id
-    });
-    const burstId = `burst-recent-${slot.id}`;
-    bursts.push({
-      id: burstId,
-      workspaceId: slot.workspaceId,
-      projectId: slot.projectId,
-      outcomeId,
-      title: slot.taskText,
-      sessionLabel: slot.sessionLabel,
-      type: slot.taskType,
-      notes: slot.taskNotes,
-      agentEligible: slot.agentEligible,
-      lastDurationSeconds: slot.lastDurationSeconds,
-      loggedAt: slot.loggedAt,
-      source: "recent"
-    });
-    recentBurstIds.push(burstId);
   }
 
   return {
@@ -478,15 +360,55 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
     completedSessions: typeof legacy.completedSessions === "number" ? legacy.completedSessions : base.completedSessions,
     lastTickAt: typeof legacy.lastTickAt === "number" ? legacy.lastTickAt : base.lastTickAt,
     activeOutcomeId: typeof legacy.activeTaskId === "string" ? legacyTaskIdToOutcomeId.get(legacy.activeTaskId) || null : null,
-    isTaskFormOpen: typeof legacy.isTaskFormOpen === "boolean" ? legacy.isTaskFormOpen : base.isTaskFormOpen,
+    isOutcomeFormOpen: typeof legacy.isTaskFormOpen === "boolean" ? legacy.isTaskFormOpen : base.isOutcomeFormOpen,
     editingOutcomeId: typeof legacy.editingTaskId === "string" ? legacyTaskIdToOutcomeId.get(legacy.editingTaskId) || null : null,
     isWorkspaceMenuOpen: typeof legacy.isWorkspaceMenuOpen === "boolean" ? legacy.isWorkspaceMenuOpen : base.isWorkspaceMenuOpen,
     isProjectMenuOpen: typeof legacy.isProjectMenuOpen === "boolean" ? legacy.isProjectMenuOpen : base.isProjectMenuOpen,
-    customTaskTypes: Array.isArray(legacy.customTaskTypes)
+    customOutcomeTypes: Array.isArray(legacy.customTaskTypes)
       ? legacy.customTaskTypes.filter((type): type is string => typeof type === "string").map((type) => type.trim().toLowerCase()).filter(Boolean)
       : [],
-    recentBurstIds,
     status: typeof legacy.status === "string" ? legacy.status : base.status,
+    workspaces,
+    projects,
+    outcomes,
+    bursts: []
+  };
+}
+
+function isLocalCache(input: unknown): input is LocalCache {
+  if (!input || typeof input !== "object") return false;
+  const candidate = input as Partial<LocalCache>;
+  return candidate.version === 4 && Array.isArray(candidate.workspaceIds) && Boolean(candidate.ui);
+}
+
+function isLegacyLocalCache(input: unknown): input is LegacyLocalCache {
+  if (!input || typeof input !== "object") return false;
+  const candidate = input as Partial<LegacyLocalCache>;
+  return candidate.version === 3 && Array.isArray(candidate.workspaceIds) && Boolean(candidate.ui);
+}
+
+function deserializeLocalCache(cache: LocalCache): Partial<AppState> {
+  const workspaces = cache.workspaceIds
+    .map((workspaceId) => cache.workspacesById[workspaceId])
+    .filter((workspace): workspace is Workspace => Boolean(workspace));
+  const projects = Object.values(cache.projectsById || {});
+  const outcomes = Object.values(cache.outcomesById || {});
+  const bursts = Object.values(cache.burstsById || {});
+
+  return {
+    activeWorkspaceId: cache.ui.activeWorkspaceId,
+    elapsedSeconds: cache.ui.elapsedSeconds,
+    targetSeconds: cache.ui.targetSeconds,
+    isRunning: cache.ui.isRunning,
+    completedSessions: cache.ui.completedSessions,
+    lastTickAt: cache.ui.lastTickAt,
+    activeOutcomeId: cache.ui.activeOutcomeId,
+    isOutcomeFormOpen: cache.ui.isOutcomeFormOpen,
+    editingOutcomeId: cache.ui.editingOutcomeId,
+    isWorkspaceMenuOpen: cache.ui.isWorkspaceMenuOpen,
+    isProjectMenuOpen: cache.ui.isProjectMenuOpen,
+    customOutcomeTypes: cache.ui.customOutcomeTypes,
+    status: cache.ui.status,
     workspaces,
     projects,
     outcomes,
@@ -494,13 +416,7 @@ function migrateLegacyState(input: unknown): Partial<AppState> | undefined {
   };
 }
 
-function isLocalCache(input: unknown): input is LocalCache {
-  if (!input || typeof input !== "object") return false;
-  const candidate = input as Partial<LocalCache>;
-  return candidate.version === 3 && Array.isArray(candidate.workspaceIds) && Boolean(candidate.ui);
-}
-
-function deserializeLocalCache(cache: LocalCache): Partial<AppState> {
+function deserializeLegacyLocalCache(cache: LegacyLocalCache): Partial<AppState> {
   const workspaces = cache.workspaceIds
     .map((workspaceId) => cache.workspacesById[workspaceId])
     .filter((workspace): workspace is Workspace => Boolean(workspace));
@@ -515,20 +431,21 @@ function deserializeLocalCache(cache: LocalCache): Partial<AppState> {
     agentEligible: outcome.agentEligible,
     done: outcome.done
   }));
-  const bursts = Object.values(cache.burstsById || {}).map((burst) => ({
-    id: burst.id,
-    workspaceId: burst.workspaceId,
-    projectId: burst.projectId,
-    outcomeId: burst.outcomeId,
-    title: burst.title,
-    sessionLabel: burst.sessionLabel,
-    type: burst.type,
-    notes: burst.notes,
-    agentEligible: burst.agentEligible,
-    lastDurationSeconds: burst.lastDurationSeconds,
-    loggedAt: burst.loggedAt,
-    source: burst.kind
-  }));
+  const bursts = Object.values(cache.burstsById || {})
+    .filter((burst) => burst.kind === "recent" && typeof burst.lastDurationSeconds === "number" && burst.lastDurationSeconds > 0)
+    .map((burst) => ({
+      id: burst.id,
+      workspaceId: burst.workspaceId,
+      projectId: burst.projectId,
+      outcomeId: burst.outcomeId,
+      title: burst.title,
+      sessionLabel: burst.sessionLabel,
+      type: burst.type,
+      notes: burst.notes,
+      agentEligible: burst.agentEligible,
+      durationSeconds: burst.lastDurationSeconds,
+      loggedAt: burst.loggedAt
+    }));
 
   return {
     activeWorkspaceId: cache.ui.activeWorkspaceId,
@@ -538,12 +455,11 @@ function deserializeLocalCache(cache: LocalCache): Partial<AppState> {
     completedSessions: cache.ui.completedSessions,
     lastTickAt: cache.ui.lastTickAt,
     activeOutcomeId: cache.ui.activeOutcomeId,
-    isTaskFormOpen: cache.ui.isTaskFormOpen,
+    isOutcomeFormOpen: cache.ui.isTaskFormOpen,
     editingOutcomeId: cache.ui.editingOutcomeId,
     isWorkspaceMenuOpen: cache.ui.isWorkspaceMenuOpen,
     isProjectMenuOpen: cache.ui.isProjectMenuOpen,
-    customTaskTypes: cache.ui.customTaskTypes,
-    recentBurstIds: [...cache.recentBurstIds],
+    customOutcomeTypes: cache.ui.customTaskTypes,
     status: cache.ui.status,
     workspaces,
     projects,
@@ -606,9 +522,13 @@ function normalizeBursts(input: unknown): Burst[] {
   if (!Array.isArray(input)) return [];
   return input.flatMap((burst, index) => {
     if (!burst || typeof burst !== "object") return [];
-    const candidate = burst as Partial<Burst>;
+    const candidate = burst as Partial<Burst> & { lastDurationSeconds?: unknown; loggedAt?: unknown };
     if (typeof candidate.projectId !== "string" || typeof candidate.workspaceId !== "string") return [];
     if (typeof candidate.title !== "string" || !candidate.title.trim()) return [];
+    const durationSeconds = typeof candidate.durationSeconds === "number"
+      ? candidate.durationSeconds
+      : (typeof candidate.lastDurationSeconds === "number" ? candidate.lastDurationSeconds : null);
+    if (typeof durationSeconds !== "number" || durationSeconds <= 0) return [];
     return [{
       id: typeof candidate.id === "string" ? candidate.id : `burst-${index + 1}`,
       workspaceId: candidate.workspaceId,
@@ -619,9 +539,8 @@ function normalizeBursts(input: unknown): Burst[] {
       type: typeof candidate.type === "string" ? candidate.type.trim() : "",
       notes: typeof candidate.notes === "string" ? candidate.notes : "",
       agentEligible: Boolean(candidate.agentEligible),
-      lastDurationSeconds: typeof candidate.lastDurationSeconds === "number" ? candidate.lastDurationSeconds : null,
-      loggedAt: typeof candidate.loggedAt === "number" ? candidate.loggedAt : 0,
-      source: candidate.source === "recent" ? "recent" : "task"
+      durationSeconds,
+      loggedAt: typeof candidate.loggedAt === "number" ? candidate.loggedAt : 0
     }];
   });
 }
@@ -665,43 +584,57 @@ function ensureVisibleProjectIds(workspace: Workspace, projects: Project[]): str
   return visible.slice(0, requiredCount);
 }
 
-function outcomeToTask(outcome: Outcome): Task {
+function withStatus(state: AppState, status: string): AppState {
+  return { ...state, status };
+}
+
+function deriveOutcomeTitle(value: string): string {
+  const trimmed = value.trim().replace(/\s+/g, " ");
+  if (!trimmed) return "Outcome";
+  const delimiterMatch = trimmed.match(/^(.+?)(?:\s[-:\/|>]+\s)(.+)$/);
+  if (delimiterMatch?.[1]?.trim()) return delimiterMatch[1].trim();
+  return trimmed;
+}
+
+export function buildBurstHistoryLabel(burst: Pick<Burst, "title" | "sessionLabel">): string {
+  const outcomeTitle = burst.title.trim();
+  const sessionLabel = burst.sessionLabel.trim();
+  return sessionLabel ? `${outcomeTitle} -> ${sessionLabel}` : outcomeTitle;
+}
+
+function buildOutcomeKey(workspaceId: string, projectId: string, outcomeTitle: string): string {
+  return `${workspaceId}::${projectId}::${outcomeTitle.trim().toLowerCase()}`;
+}
+
+function upsertBurst(bursts: Burst[], nextBurst: Burst): Burst[] {
+  const existingIndex = bursts.findIndex((burst) => burst.id === nextBurst.id);
+  if (existingIndex === -1) return [nextBurst, ...bursts];
+  return bursts.map((burst) => burst.id === nextBurst.id ? nextBurst : burst);
+}
+
+function buildLoggedBurstFromState(
+  state: AppState,
+  durationSeconds: number,
+  sessionLabel: string,
+  loggedAt: number
+): Burst | null {
+  const workspace = getActiveWorkspace(state);
+  const project = getActiveProject(state);
+  const outcome = state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
+  if (!workspace || !project || !outcome) return null;
   return {
-    id: outcome.id,
-    text: outcome.title,
+    id: `burst-${loggedAt}`,
+    workspaceId: workspace.id,
+    projectId: project.id,
+    outcomeId: outcome.id,
+    title: outcome.title,
+    sessionLabel: sessionLabel.trim(),
     type: outcome.type,
     notes: outcome.notes,
     agentEligible: outcome.agentEligible,
-    done: outcome.done
+    durationSeconds,
+    loggedAt
   };
-}
-
-function normalizeRecentTaskSlots(input: unknown): RecentTaskSlot[] {
-  const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
-  if (!Array.isArray(input)) return [];
-  return input.flatMap((slot, index) => {
-    if (!slot || typeof slot !== "object") return [];
-    const candidate = slot as Partial<RecentTaskSlot>;
-    if (typeof candidate.taskText !== "string" || !candidate.taskText.trim()) return [];
-    if (typeof candidate.workspaceId !== "string" || typeof candidate.projectId !== "string") return [];
-    if (typeof candidate.workspaceName !== "string" || typeof candidate.projectName !== "string") return [];
-    if (typeof candidate.loggedAt !== "number" || candidate.loggedAt < cutoff) return [];
-    return [{
-      id: typeof candidate.id === "string" ? candidate.id : `recent-task-slot-${index}-${candidate.loggedAt}`,
-      taskId: typeof candidate.taskId === "string" ? candidate.taskId : null,
-      taskText: candidate.taskText.trim(),
-      sessionLabel: typeof candidate.sessionLabel === "string" ? candidate.sessionLabel.trim() : "",
-      taskType: typeof candidate.taskType === "string" ? candidate.taskType.trim() : "",
-      taskNotes: typeof candidate.taskNotes === "string" ? candidate.taskNotes : "",
-      agentEligible: Boolean(candidate.agentEligible),
-      workspaceId: candidate.workspaceId,
-      workspaceName: candidate.workspaceName.trim(),
-      projectId: candidate.projectId,
-      projectName: candidate.projectName.trim(),
-      lastDurationSeconds: typeof candidate.lastDurationSeconds === "number" && candidate.lastDurationSeconds >= 0 ? candidate.lastDurationSeconds : null,
-      loggedAt: candidate.loggedAt
-    }];
-  });
 }
 
 function getDefaultActiveOutcomeId(state: AppState, projectId: string | null, currentOutcomeId: string | null): string | null {
@@ -749,70 +682,6 @@ function setActiveProjectOnWorkspace(state: AppState, workspaceId: string, proje
   });
 }
 
-function withStatus(state: AppState, status: string): AppState {
-  return { ...state, status };
-}
-
-function deriveOutcomeTitle(value: string): string {
-  const trimmed = value.trim().replace(/\s+/g, " ");
-  if (!trimmed) return "Outcome";
-  const delimiterMatch = trimmed.match(/^(.+?)(?:\s[-:\/|>]+\s)(.+)$/);
-  if (delimiterMatch?.[1]?.trim()) return delimiterMatch[1].trim();
-  return trimmed;
-}
-
-export function buildBurstHistoryLabel(burst: Pick<Burst, "title" | "sessionLabel">): string {
-  const taskTitle = burst.title.trim();
-  const sessionLabel = burst.sessionLabel.trim();
-  return sessionLabel ? `${taskTitle} -> ${sessionLabel}` : taskTitle;
-}
-
-function buildOutcomeKey(workspaceId: string, projectId: string, outcomeTitle: string): string {
-  return `${workspaceId}::${projectId}::${outcomeTitle.trim().toLowerCase()}`;
-}
-
-function mergeRecentBurstId(state: AppState, nextBurstId: string): string[] {
-  const nextBurst = state.bursts.find((burst) => burst.id === nextBurstId) || null;
-  if (!nextBurst) return state.recentBurstIds;
-  const cutoff = Date.now() - RECENT_TASK_SLOT_WINDOW_MS;
-  const remaining = state.recentBurstIds.filter((burstId) => {
-    const burst = state.bursts.find((entry) => entry.id === burstId);
-    return Boolean(
-      burst
-      && burst.loggedAt >= cutoff
-      && buildBurstHistoryLabel(burst).trim().toLowerCase() !== buildBurstHistoryLabel(nextBurst).trim().toLowerCase()
-    );
-  });
-  return [nextBurstId, ...remaining];
-}
-
-function upsertBurst(bursts: Burst[], nextBurst: Burst): Burst[] {
-  const existingIndex = bursts.findIndex((burst) => burst.id === nextBurst.id);
-  if (existingIndex === -1) return [nextBurst, ...bursts];
-  return bursts.map((burst) => burst.id === nextBurst.id ? nextBurst : burst);
-}
-
-function buildRecentBurstFromState(state: AppState, loggedAt: number): Burst | null {
-  const workspace = getActiveWorkspace(state);
-  const project = getActiveProject(state);
-  const outcome = state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
-  if (!workspace || !project || !outcome) return null;
-  return {
-    id: `burst-recent-${loggedAt}`,
-    workspaceId: workspace.id,
-    projectId: project.id,
-    outcomeId: outcome.id,
-    title: outcome.title,
-    sessionLabel: "",
-    type: outcome.type,
-    notes: outcome.notes,
-    agentEligible: outcome.agentEligible,
-    lastDurationSeconds: state.targetSeconds,
-    loggedAt,
-    source: "recent"
-  };
-}
-
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "hydrate-state": {
@@ -827,8 +696,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return { ...state, isWorkspaceMenuOpen: false, isProjectMenuOpen: false };
     case "set-status":
       return withStatus(state, action.status);
-    case "select-task":
-      return { ...state, activeOutcomeId: action.taskId, status: "Task selected for the next session." };
+    case "select-outcome":
+      return { ...state, activeOutcomeId: action.outcomeId, status: "Outcome selected for the next session." };
     case "select-workspace": {
       const workspace = state.workspaces.find((entry) => entry.id === action.workspaceId) || null;
       const activeOutcomeId = getDefaultActiveOutcomeId(state, workspace?.activeProjectId || null, null);
@@ -873,7 +742,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         projects: nextProjects,
         outcomes: nextOutcomes,
         bursts: nextBursts,
-        recentBurstIds: state.recentBurstIds.filter((burstId) => nextBursts.some((burst) => burst.id === burstId)),
         activeWorkspaceId: nextWorkspaceId,
         activeOutcomeId: state.activeWorkspaceId === action.workspaceId ? null : state.activeOutcomeId,
         status: "Workspace deleted."
@@ -934,15 +802,25 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         projects: remainingProjects,
         outcomes: remainingOutcomes,
         bursts: remainingBursts,
-        recentBurstIds: state.recentBurstIds.filter((burstId) => remainingBursts.some((burst) => burst.id === burstId)),
         activeOutcomeId: null,
         status: "Project deleted."
       });
     }
     case "set-timer-target":
-      return { ...state, targetSeconds: action.targetSeconds, elapsedSeconds: Math.min(state.elapsedSeconds, action.targetSeconds), status: `Timer target set to ${Math.floor(action.targetSeconds / 60).toString().padStart(2, "0")}:${(action.targetSeconds % 60).toString().padStart(2, "0")}.` };
+      return {
+        ...state,
+        targetSeconds: action.targetSeconds,
+        elapsedSeconds: Math.min(state.elapsedSeconds, action.targetSeconds),
+        status: `Timer target set to ${Math.floor(action.targetSeconds / 60).toString().padStart(2, "0")}:${(action.targetSeconds % 60).toString().padStart(2, "0")}.`
+      };
     case "start-timer":
-      return { ...state, elapsedSeconds: state.elapsedSeconds >= state.targetSeconds ? 0 : state.elapsedSeconds, isRunning: true, lastTickAt: action.now, status: `Timer started toward ${Math.floor(state.targetSeconds / 60).toString().padStart(2, "0")}:${(state.targetSeconds % 60).toString().padStart(2, "0")}.` };
+      return {
+        ...state,
+        elapsedSeconds: state.elapsedSeconds >= state.targetSeconds ? 0 : state.elapsedSeconds,
+        isRunning: true,
+        lastTickAt: action.now,
+        status: `Timer started toward ${Math.floor(state.targetSeconds / 60).toString().padStart(2, "0")}:${(state.targetSeconds % 60).toString().padStart(2, "0")}.`
+      };
     case "pause-timer":
       return { ...state, isRunning: false, lastTickAt: null, status: "Timer paused." };
     case "reset-timer":
@@ -953,60 +831,63 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       if (elapsedSinceLastTick <= 0) return state;
       const nextElapsed = state.elapsedSeconds + elapsedSinceLastTick;
       if (nextElapsed >= state.targetSeconds) {
-        const recentBurst = buildRecentBurstFromState(state, action.now);
+        const loggedBurst = buildLoggedBurstFromState(state, state.targetSeconds, "", action.now);
         return normalizeState({
           ...state,
           elapsedSeconds: state.targetSeconds,
           isRunning: false,
           lastTickAt: null,
           completedSessions: state.completedSessions + 1,
-          bursts: recentBurst ? upsertBurst(state.bursts, recentBurst) : state.bursts,
-          recentBurstIds: recentBurst ? [recentBurst.id, ...state.recentBurstIds.filter((id) => id !== recentBurst.id)] : state.recentBurstIds,
+          bursts: loggedBurst ? upsertBurst(state.bursts, loggedBurst) : state.bursts,
           status: "Session complete. Nice work."
         });
       }
       return { ...state, elapsedSeconds: nextElapsed, lastTickAt: state.lastTickAt + elapsedSinceLastTick * 1000 };
     }
-    case "open-task-form":
-      return { ...state, isTaskFormOpen: true, editingOutcomeId: null };
-    case "close-task-form":
-      return { ...state, isTaskFormOpen: false, editingOutcomeId: null };
-    case "edit-task":
-      return { ...state, editingOutcomeId: action.taskId, isTaskFormOpen: true, status: "Editing task." };
-    case "save-task": {
+    case "open-outcome-form":
+      return { ...state, isOutcomeFormOpen: true, editingOutcomeId: null };
+    case "close-outcome-form":
+      return { ...state, isOutcomeFormOpen: false, editingOutcomeId: null };
+    case "edit-outcome":
+      return { ...state, editingOutcomeId: action.outcomeId, isOutcomeFormOpen: true, status: "Editing outcome." };
+    case "save-outcome": {
       const project = getActiveProject(state);
       const workspace = getActiveWorkspace(state);
       if (!project || !workspace) return state;
       const customType = action.customType.trim().toLowerCase();
-      const nextCustomTypes = customType && !state.customTaskTypes.includes(customType) ? [...state.customTaskTypes, customType].sort() : state.customTaskTypes;
+      const nextCustomTypes = customType && !state.customOutcomeTypes.includes(customType)
+        ? [...state.customOutcomeTypes, customType].sort()
+        : state.customOutcomeTypes;
       const outcomeId = state.editingOutcomeId || `outcome-${action.now}`;
       const nextOutcomes = state.editingOutcomeId
-        ? state.outcomes.map((outcome) => outcome.id === state.editingOutcomeId ? { ...outcome, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible } : outcome)
-        : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, done: false }];
-      const nextBursts = state.editingOutcomeId
-        ? state.bursts.map((burst) => burst.outcomeId === state.editingOutcomeId && burst.source === "task" ? { ...burst, title: action.draft.text, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible } : burst)
-        : [...state.bursts, { id: `burst-task-${outcomeId}`, workspaceId: workspace.id, projectId: project.id, outcomeId, title: action.draft.text, sessionLabel: "", type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, lastDurationSeconds: null, loggedAt: 0, source: "task" }];
+        ? state.outcomes.map((outcome) => outcome.id === state.editingOutcomeId
+          ? { ...outcome, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible }
+          : outcome)
+        : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, done: false }];
+      const nextBursts = state.bursts.map((burst) => burst.outcomeId === state.editingOutcomeId
+        ? { ...burst, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible }
+        : burst);
       return normalizeState({
         ...state,
         outcomes: nextOutcomes,
         bursts: nextBursts,
         activeOutcomeId: outcomeId,
-        customTaskTypes: nextCustomTypes,
-        isTaskFormOpen: false,
+        customOutcomeTypes: nextCustomTypes,
+        isOutcomeFormOpen: false,
         editingOutcomeId: null,
-        status: state.editingOutcomeId ? "Task updated." : "Task added."
+        status: state.editingOutcomeId ? "Outcome updated." : "Outcome added."
       });
     }
-    case "toggle-task":
+    case "toggle-outcome":
       return normalizeState({
         ...state,
-        outcomes: state.outcomes.map((outcome) => outcome.id === action.taskId ? { ...outcome, done: !outcome.done } : outcome),
-        status: state.outcomes.find((outcome) => outcome.id === action.taskId)?.done ? "Task marked active." : "Task completed."
+        outcomes: state.outcomes.map((outcome) => outcome.id === action.outcomeId ? { ...outcome, done: !outcome.done } : outcome),
+        status: state.outcomes.find((outcome) => outcome.id === action.outcomeId)?.done ? "Outcome marked active." : "Outcome completed."
       });
-    case "delete-task": {
-      const deletedActive = state.activeOutcomeId === action.taskId;
-      const nextOutcomes = state.outcomes.filter((outcome) => outcome.id !== action.taskId);
-      const nextBursts = state.bursts.filter((burst) => burst.outcomeId !== action.taskId || burst.source === "recent");
+    case "delete-outcome": {
+      const deletedActive = state.activeOutcomeId === action.outcomeId;
+      const nextOutcomes = state.outcomes.filter((outcome) => outcome.id !== action.outcomeId);
+      const nextBursts = state.bursts.filter((burst) => burst.outcomeId !== action.outcomeId);
       return normalizeState({
         ...state,
         outcomes: nextOutcomes,
@@ -1015,7 +896,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         isRunning: deletedActive ? false : state.isRunning,
         elapsedSeconds: deletedActive ? 0 : state.elapsedSeconds,
         lastTickAt: deletedActive ? null : state.lastTickAt,
-        status: deletedActive ? "Task deleted and timer reset." : "Task deleted."
+        status: deletedActive ? "Outcome deleted and timer reset." : "Outcome deleted."
       });
     }
     case "clear-completed": {
@@ -1025,31 +906,18 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       return normalizeState({
         ...state,
         outcomes: remaining,
-        bursts: state.bursts.filter((burst) => burst.projectId !== project.id || burst.source !== "task" || remaining.some((outcome) => outcome.id === burst.outcomeId)),
+        bursts: state.bursts.filter((burst) => burst.projectId !== project.id || remaining.some((outcome) => outcome.id === burst.outcomeId)),
         activeOutcomeId: getDefaultActiveOutcomeId({ ...state, outcomes: remaining }, project.id, state.activeOutcomeId),
-        status: "Completed tasks cleared."
+        status: "Completed outcomes cleared."
       });
     }
     case "log-manual-entry": {
-      const burst: Burst = {
-        id: action.slot.id,
-        workspaceId: action.slot.workspaceId,
-        projectId: action.slot.projectId,
-        outcomeId: action.slot.taskId,
-        title: action.slot.taskText,
-        sessionLabel: action.sessionLabel.trim(),
-        type: action.slot.taskType,
-        notes: action.slot.taskNotes,
-        agentEligible: action.slot.agentEligible,
-        lastDurationSeconds: action.durationSeconds,
-        loggedAt: action.slot.loggedAt,
-        source: "recent"
-      };
+      const burst = buildLoggedBurstFromState(state, action.durationSeconds, action.sessionLabel, action.loggedAt);
+      if (!burst) return withStatus(state, "Pick a current outcome first.");
       return normalizeState({
         ...state,
         bursts: upsertBurst(state.bursts, burst),
-        recentBurstIds: [burst.id, ...state.recentBurstIds.filter((id) => id !== burst.id)],
-        status: `Logged ${formatManualDuration(action.durationSeconds)} for ${action.slot.taskText}.`
+        status: `Logged ${formatManualDuration(action.durationSeconds)} for ${burst.title}.`
       });
     }
     case "set-burst-session-label":
@@ -1058,30 +926,6 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         bursts: state.bursts.map((burst) => burst.id === action.burstId ? { ...burst, sessionLabel: action.sessionLabel.trim() } : burst),
         status: action.sessionLabel.trim() ? "Session label saved." : "Session label cleared."
       });
-    case "clear-recent-task-slots":
-      return normalizeState({
-        ...state,
-        recentBurstIds: [],
-        bursts: state.bursts.filter((burst) => burst.source !== "recent"),
-        status: "Recent task slots cleared."
-      });
-    case "restore-recent-task": {
-      const burst = state.bursts.find((entry) => entry.id === action.slot.id) || null;
-      const workspace = state.workspaces.find((entry) => entry.id === action.slot.workspaceId) || null;
-      const project = state.projects.find((entry) => entry.id === action.slot.projectId) || null;
-      if (!workspace || !project || !burst) return withStatus(state, "The original workspace or project is no longer available.");
-      const outcomeId = burst.outcomeId || `outcome-${action.now}`;
-      const hasOutcome = state.outcomes.some((outcome) => outcome.id === outcomeId);
-      return normalizeState({
-        ...state,
-        workspaces: setActiveProjectOnWorkspace(state, workspace.id, project.id),
-        activeWorkspaceId: workspace.id,
-        activeOutcomeId: outcomeId,
-        outcomes: hasOutcome ? state.outcomes : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: burst.title, type: burst.type, notes: burst.notes, agentEligible: burst.agentEligible, done: false }],
-        bursts: state.bursts.map((entry) => entry.id === burst.id ? { ...entry, outcomeId } : entry),
-        status: "Task restored from recent activity."
-      });
-    }
     default:
       return state;
   }

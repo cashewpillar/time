@@ -20,8 +20,8 @@ type TimerCardProps = {
   elapsedSeconds: number;
   targetSeconds: number;
   isRunning: boolean;
-  selectedTaskName: string | null;
-  selectedTaskContext: string | null;
+  selectedOutcomeName: string | null;
+  selectedOutcomeContext: string | null;
   timerStatusMessage: string | null;
   shouldHighlightStart: boolean;
   onToggleTimer: () => void;
@@ -35,8 +35,8 @@ export function TimerCard({
   elapsedSeconds,
   targetSeconds,
   isRunning,
-  selectedTaskName,
-  selectedTaskContext,
+  selectedOutcomeName,
+  selectedOutcomeContext,
   timerStatusMessage,
   shouldHighlightStart,
   onToggleTimer,
@@ -121,9 +121,9 @@ export function TimerCard({
   }, [showCustomManualInput]);
 
   const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 ? "Start" : "Resume");
-  const startDisabled = !selectedTaskName && !isRunning;
+  const startDisabled = !selectedOutcomeName && !isRunning;
   const startTooltip = "Select an outcome before starting the timer.";
-  const hasManualTarget = Boolean(selectedTaskName);
+  const hasManualTarget = Boolean(selectedOutcomeName);
   const activeTimerPresetMinutes = targetSeconds % 60 === 0 ? targetSeconds / 60 : null;
   const customManualDurationSeconds = (() => {
     const hours = Number(customManualHoursDraft || "0");
@@ -250,9 +250,9 @@ export function TimerCard({
       ) : null}
 
       <div className="timer-focus-banner">
-        <div className="timer-focus-label">{selectedTaskName ? "Now focusing" : "Not focusing"}</div>
-        <div className="timer-focus-name">{selectedTaskName || "Pick an outcome to start"}</div>
-        {selectedTaskContext ? <div className="timer-focus-context">{selectedTaskContext}</div> : null}
+        <div className="timer-focus-label">{selectedOutcomeName ? "Now focusing" : "Not focusing"}</div>
+        <div className="timer-focus-name">{selectedOutcomeName || "Pick an outcome to start"}</div>
+        {selectedOutcomeContext ? <div className="timer-focus-context">{selectedOutcomeContext}</div> : null}
       </div>
 
       <div className="timer-view-toggle" role="tablist" aria-label="Timer mode">

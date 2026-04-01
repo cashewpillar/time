@@ -1,54 +1,57 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { TaskComposer } from "./TaskComposer";
 import { formatManualDuration } from "../lib/time";
 import { buildBurstHistoryLabel } from "../state/app-state";
-import type { Burst, Outcome, Project, TaskDraft } from "../types/app";
+import type { Burst, Outcome, OutcomeDraft, Project } from "../types/app";
 
 type TaskListProps = {
   project: Project | null;
   outcomes: Outcome[];
   bursts: Burst[];
-  editingTask: Outcome | null;
-  activeTaskId: string | null;
-  taskTypeOptions: string[];
+  editingOutcome: Outcome | null;
+  activeOutcomeId: string | null;
+  outcomeTypeOptions: string[];
   isComposerOpen: boolean;
   onQueueExpandedChange: (isExpanded: boolean) => void;
-  onSelectTask: (taskId: string) => void;
-  onEditTask: (taskId: string) => void;
-  onToggleTask: (taskId: string) => void;
-  onDeleteTask: (taskId: string) => void;
+  onSelectOutcome: (outcomeId: string) => void;
+  onEditOutcome: (outcomeId: string) => void;
+  onToggleOutcome: (outcomeId: string) => void;
+  onDeleteOutcome: (outcomeId: string) => void;
   onClearCompleted: () => void;
   onOpenComposer: () => void;
   onCancelEdit: () => void;
   onCancelComposer: () => void;
-  onSaveTask: (draft: TaskDraft, customType: string) => void;
+  onSaveOutcome: (draft: OutcomeDraft, customType: string) => void;
 };
 
 export function TaskList({
   project,
   outcomes,
   bursts,
-  editingTask,
-  activeTaskId,
-  taskTypeOptions,
+  editingOutcome,
+  activeOutcomeId,
+  outcomeTypeOptions,
   isComposerOpen,
   onQueueExpandedChange,
-  onSelectTask,
-  onEditTask,
-  onToggleTask,
-  onDeleteTask,
+  onSelectOutcome,
+  onEditOutcome,
+  onToggleOutcome,
+  onDeleteOutcome,
   onClearCompleted,
   onOpenComposer,
   onCancelEdit,
   onCancelComposer,
-  onSaveTask
+  onSaveOutcome
 }: TaskListProps) {
-  const selectedTask = outcomes.find((task) => task.id === activeTaskId) || null;
-  const queueTasks = outcomes.filter((task) => task.id !== activeTaskId);
+  const selectedOutcome = outcomes.find((outcome) => outcome.id === activeOutcomeId) || null;
+  const queuedOutcomes = outcomes.filter((outcome) => outcome.id !== activeOutcomeId);
   const hasAnyTasks = Boolean(outcomes.length);
-  const hasOtherTasks = queueTasks.length > 0;
+  const hasOtherTasks = queuedOutcomes.length > 0;
   const [isQueueOpen, setIsQueueOpen] = useState(() => !hasOtherTasks);
   const [isSelectedBurstHistoryOpen, setIsSelectedBurstHistoryOpen] = useState(false);
+  const [hasBurstHistoryFadeStart, setHasBurstHistoryFadeStart] = useState(false);
+  const [hasBurstHistoryFadeEnd, setHasBurstHistoryFadeEnd] = useState(false);
+  const burstHistoryRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     setIsQueueOpen(!hasOtherTasks);
@@ -56,21 +59,45 @@ export function TaskList({
 
   useEffect(() => {
     setIsSelectedBurstHistoryOpen(false);
-  }, [activeTaskId]);
+  }, [activeOutcomeId]);
 
   useEffect(() => {
-    onQueueExpandedChange(isQueueOpen && (queueTasks.length > 0 || selectedTask !== null));
-  }, [isQueueOpen, onQueueExpandedChange, queueTasks.length, selectedTask]);
+    onQueueExpandedChange(isQueueOpen && (queuedOutcomes.length > 0 || selectedOutcome !== null));
+  }, [isQueueOpen, onQueueExpandedChange, queuedOutcomes.length, selectedOutcome]);
+
+  useEffect(() => {
+    const node = burstHistoryRef.current;
+    if (!node || !isSelectedBurstHistoryOpen) {
+      setHasBurstHistoryFadeStart(false);
+      setHasBurstHistoryFadeEnd(false);
+      return;
+    }
+
+    const updateBurstHistoryFade = () => {
+      const maxScrollTop = node.scrollHeight - node.clientHeight;
+      setHasBurstHistoryFadeStart(node.scrollTop > 4);
+      setHasBurstHistoryFadeEnd(maxScrollTop - node.scrollTop > 4);
+    };
+
+    updateBurstHistoryFade();
+    node.addEventListener("scroll", updateBurstHistoryFade, { passive: true });
+    window.addEventListener("resize", updateBurstHistoryFade);
+
+    return () => {
+      node.removeEventListener("scroll", updateBurstHistoryFade);
+      window.removeEventListener("resize", updateBurstHistoryFade);
+    };
+  }, [isSelectedBurstHistoryOpen, activeOutcomeId, bursts]);
 
   function getOutcomeBursts(outcomeId: string): Burst[] {
     return bursts
-      .filter((burst) => burst.outcomeId === outcomeId && burst.source === "recent")
+      .filter((burst) => burst.outcomeId === outcomeId)
       .sort((left, right) => right.loggedAt - left.loggedAt);
   }
 
   function getOutcomeTrackedSeconds(outcomeId: string): number {
     return getOutcomeBursts(outcomeId)
-      .reduce((sum, burst) => sum + (burst.lastDurationSeconds || 0), 0);
+      .reduce((sum, burst) => sum + burst.durationSeconds, 0);
   }
 
   function formatBurstTimestamp(timestamp: number): string {
@@ -81,24 +108,25 @@ export function TaskList({
     });
   }
 
-  function renderTask(task: Outcome, isSelected: boolean) {
-    const isEditing = editingTask?.id === task.id;
-    const outcomeBursts = getOutcomeBursts(task.id);
-    const trackedSeconds = getOutcomeTrackedSeconds(task.id);
-    const recentBursts = outcomeBursts.slice(0, isSelected ? 4 : 2);
+  function renderOutcome(outcome: Outcome, isSelected: boolean) {
+    const isEditing = editingOutcome?.id === outcome.id;
+    const outcomeBursts = getOutcomeBursts(outcome.id);
+    const trackedSeconds = getOutcomeTrackedSeconds(outcome.id);
+    const previewBursts = outcomeBursts.slice(0, 2);
+    const historyBursts = outcomeBursts;
     const showBurstHistory = isSelected && isSelectedBurstHistoryOpen;
 
     return (
-      <div key={task.id} className={`task-item${task.done ? " done" : ""}${isEditing ? " editing" : ""}${isSelected ? " selected" : " compact"}`}>
+      <div key={outcome.id} className={`task-item${outcome.done ? " done" : ""}${isEditing ? " editing" : ""}${isSelected ? " selected" : " compact"}`}>
         <button
           className="task-toggle"
           type="button"
-          data-action="toggle-task"
-          data-task-id={task.id}
-          aria-label="Toggle task"
-          onClick={() => onToggleTask(task.id)}
+          data-action="toggle-outcome"
+          data-task-id={outcome.id}
+          aria-label="Toggle outcome"
+          onClick={() => onToggleOutcome(outcome.id)}
         >
-          {task.done ? "✓" : ""}
+          {outcome.done ? "✓" : ""}
         </button>
 
         <div
@@ -106,7 +134,7 @@ export function TaskList({
           role={isEditing ? undefined : "button"}
           tabIndex={isEditing ? -1 : 0}
           onClick={isEditing ? undefined : () => {
-            onSelectTask(task.id);
+            onSelectOutcome(outcome.id);
             if (!isSelected) {
               setIsQueueOpen(false);
             }
@@ -114,7 +142,7 @@ export function TaskList({
           onKeyDown={isEditing ? undefined : (event) => {
             if (event.key === "Enter" || event.key === " ") {
               event.preventDefault();
-              onSelectTask(task.id);
+              onSelectOutcome(outcome.id);
               if (!isSelected) {
                 setIsQueueOpen(false);
               }
@@ -125,40 +153,40 @@ export function TaskList({
             <>
               <TaskComposer
                 isOpen
-                editingTask={editingTask}
-                taskTypeOptions={taskTypeOptions}
+                editingOutcome={editingOutcome}
+                outcomeTypeOptions={outcomeTypeOptions}
                 onCancel={onCancelEdit}
-                onSave={onSaveTask}
+                onSave={onSaveOutcome}
                 hideTrigger
                 className="task-form-inline"
               />
             </>
           ) : (
             <>
-              <div className="task-name">{task.title}</div>
-              {(task.type || task.agentEligible) ? (
+              <div className="task-name">{outcome.title}</div>
+              {(outcome.type || outcome.agentEligible) ? (
                 <div className="task-badges">
-                  {task.type ? <span className="task-badge">{task.type}</span> : null}
-                  {task.agentEligible ? <span className="task-badge">AI Agent OK</span> : null}
+                  {outcome.type ? <span className="task-badge">{outcome.type}</span> : null}
+                  {outcome.agentEligible ? <span className="task-badge">AI Agent OK</span> : null}
                 </div>
               ) : null}
               <div className="burst-summary">
                 <span className="burst-summary-pill">{outcomeBursts.length} burst{outcomeBursts.length === 1 ? "" : "s"}</span>
                 <span className="burst-summary-pill">{trackedSeconds ? formatManualDuration(trackedSeconds) : "00:00"} tracked</span>
               </div>
-              {recentBursts.length ? (
+              {outcomeBursts.length ? (
                 <>
                   {!isSelected ? (
                     <div className="burst-timeline">
-                      {recentBursts.map((burst) => (
+                      {previewBursts.map((burst) => (
                         <div key={burst.id} className="burst-pill">
-                          <span className="burst-pill-duration">{burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"}</span>
+                          <span className="burst-pill-duration">{formatManualDuration(burst.durationSeconds)}</span>
                           <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
                         </div>
                       ))}
                     </div>
                   ) : null}
-                  {task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
+                  {outcome.notes ? <div className="task-notes-copy">{outcome.notes}</div> : null}
                   {isSelected ? (
                     <>
                       <button
@@ -173,12 +201,15 @@ export function TaskList({
                         {showBurstHistory ? "Hide entry log" : "Show entry log"}
                       </button>
                       {showBurstHistory ? (
-                        <div className="burst-history-list">
-                          {recentBursts.map((burst) => (
+                        <div
+                          ref={burstHistoryRef}
+                          className={`burst-history-list${hasBurstHistoryFadeStart ? " fade-start" : ""}${hasBurstHistoryFadeEnd ? " fade-end" : ""}`}
+                        >
+                          {historyBursts.map((burst) => (
                             <div key={`${burst.id}-history`} className="burst-history-item">
                               <div className="burst-history-label">{buildBurstHistoryLabel(burst)}</div>
                               <div className="burst-history-meta">
-                                {burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"} • {formatBurstTimestamp(burst.loggedAt)}
+                                {formatManualDuration(burst.durationSeconds)} • {formatBurstTimestamp(burst.loggedAt)}
                               </div>
                             </div>
                           ))}
@@ -190,17 +221,17 @@ export function TaskList({
               ) : (
                 <div className="burst-empty">No bursts yet. Start the timer or log time to build history.</div>
               )}
-              {!recentBursts.length && task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
+              {!outcomeBursts.length && outcome.notes ? <div className="task-notes-copy">{outcome.notes}</div> : null}
             </>
           )}
         </div>
 
         {!isEditing ? (
           <div className="task-actions">
-            <button className="icon-action-btn" type="button" data-action="edit-task" data-task-id={task.id} aria-label="Edit task" onClick={() => onEditTask(task.id)}>
+            <button className="icon-action-btn" type="button" data-action="edit-outcome" data-task-id={outcome.id} aria-label="Edit outcome" onClick={() => onEditOutcome(outcome.id)}>
               ✎
             </button>
-            <button className="delete-btn" type="button" data-action="delete-task" data-task-id={task.id} aria-label="Delete task" onClick={() => onDeleteTask(task.id)}>
+            <button className="delete-btn" type="button" data-action="delete-outcome" data-task-id={outcome.id} aria-label="Delete outcome" onClick={() => onDeleteOutcome(outcome.id)}>
               ✕
             </button>
           </div>
@@ -211,20 +242,20 @@ export function TaskList({
 
   return (
     <>
-      {selectedTask ? (
+      {selectedOutcome ? (
         <div className="selected-task-panel">
           <div className="selected-task-kicker">Selected outcome</div>
           <div className="tasks-list" id="tasksList">
-            {renderTask(selectedTask, true)}
+            {renderOutcome(selectedOutcome, true)}
           </div>
         </div>
       ) : null}
 
-      {queueTasks.length ? (
+      {queuedOutcomes.length ? (
         <div className="task-queue">
           <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
             <span className="task-queue-label">Other outcomes</span>
-            <span className="task-queue-count">{queueTasks.length}</span>
+            <span className="task-queue-count">{queuedOutcomes.length}</span>
             <span className="task-queue-caret">{isQueueOpen ? "Hide" : "Show"}</span>
           </button>
 
@@ -232,21 +263,21 @@ export function TaskList({
             <>
               <TaskComposer
                 isOpen={isComposerOpen}
-                editingTask={null}
-                taskTypeOptions={taskTypeOptions}
+                editingOutcome={null}
+                outcomeTypeOptions={outcomeTypeOptions}
                 onOpen={onOpenComposer}
                 onCancel={onCancelComposer}
-                onSave={onSaveTask}
+                onSave={onSaveOutcome}
                 highlightTrigger={false}
               />
 
               <div className="tasks-list task-queue-list">
-                {queueTasks.map((task) => renderTask(task, false))}
+                {queuedOutcomes.map((outcome) => renderOutcome(outcome, false))}
               </div>
             </>
           ) : null}
         </div>
-      ) : !editingTask ? (
+      ) : !editingOutcome ? (
         <div className="task-queue">
           <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
             <span className="task-queue-label">{hasAnyTasks ? "Other outcomes" : "Outcomes"}</span>
@@ -257,11 +288,11 @@ export function TaskList({
           {isQueueOpen ? (
             <TaskComposer
               isOpen={isComposerOpen}
-              editingTask={null}
-              taskTypeOptions={taskTypeOptions}
+              editingOutcome={null}
+              outcomeTypeOptions={outcomeTypeOptions}
               onOpen={onOpenComposer}
               onCancel={onCancelComposer}
-              onSave={onSaveTask}
+              onSave={onSaveOutcome}
               highlightTrigger={!hasAnyTasks}
             />
           ) : null}
@@ -272,11 +303,11 @@ export function TaskList({
         <div className="task-empty-state">Add an outcome, then pick it to start focusing.</div>
       ) : null}
 
-      {outcomes.length && !selectedTask ? (
+      {outcomes.length && !selectedOutcome ? (
         <div className="task-empty-state">Pick an outcome to lock in your focus session.</div>
       ) : null}
 
-      {!selectedTask && !queueTasks.length ? (
+      {!selectedOutcome && !queuedOutcomes.length ? (
         <div className="tasks-list" id="tasksList"></div>
       ) : null}
     </>
