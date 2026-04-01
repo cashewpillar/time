@@ -15,7 +15,8 @@ export function getSupabaseClient(): SupabaseClient | null {
     import.meta.env.VITE_SUPABASE_ANON_KEY as string,
     {
       auth: {
-        persistSession: false
+        persistSession: true,
+        detectSessionInUrl: true
       }
     }
   );

@@ -13,6 +13,7 @@ type TaskListProps = {
   outcomeTypeOptions: string[];
   isComposerOpen: boolean;
   onQueueExpandedChange: (isExpanded: boolean) => void;
+  onSelectedBurstHistoryOpenChange: (isOpen: boolean) => void;
   onSelectOutcome: (outcomeId: string) => void;
   onEditOutcome: (outcomeId: string) => void;
   onToggleOutcome: (outcomeId: string) => void;
@@ -33,6 +34,7 @@ export function TaskList({
   outcomeTypeOptions,
   isComposerOpen,
   onQueueExpandedChange,
+  onSelectedBurstHistoryOpenChange,
   onSelectOutcome,
   onEditOutcome,
   onToggleOutcome,
@@ -64,6 +66,10 @@ export function TaskList({
   useEffect(() => {
     onQueueExpandedChange(isQueueOpen && (queuedOutcomes.length > 0 || selectedOutcome !== null));
   }, [isQueueOpen, onQueueExpandedChange, queuedOutcomes.length, selectedOutcome]);
+
+  useEffect(() => {
+    onSelectedBurstHistoryOpenChange(isSelectedBurstHistoryOpen);
+  }, [isSelectedBurstHistoryOpen, onSelectedBurstHistoryOpenChange]);
 
   useEffect(() => {
     const node = burstHistoryRef.current;

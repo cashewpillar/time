@@ -1,9 +1,15 @@
--- Workspace Timer Supabase schema with Auth + RLS
--- Commit-safe setup script: non-destructive and safe to rerun.
+-- Workspace Timer Supabase reset
+-- Destructive: drops and recreates the sync tables.
+
+drop table if exists public.app_preferences cascade;
+drop table if exists public.bursts cascade;
+drop table if exists public.outcomes cascade;
+drop table if exists public.projects cascade;
+drop table if exists public.workspaces cascade;
 
 create extension if not exists pgcrypto;
 
-create table if not exists public.workspaces (
+create table public.workspaces (
   row_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   id text not null,
@@ -16,7 +22,7 @@ create table if not exists public.workspaces (
   unique (user_id, id)
 );
 
-create table if not exists public.projects (
+create table public.projects (
   row_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   id text not null,
@@ -28,7 +34,7 @@ create table if not exists public.projects (
   unique (user_id, id)
 );
 
-create table if not exists public.outcomes (
+create table public.outcomes (
   row_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   id text not null,
@@ -45,7 +51,7 @@ create table if not exists public.outcomes (
   unique (user_id, id)
 );
 
-create table if not exists public.bursts (
+create table public.bursts (
   row_id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   id text not null,
@@ -64,7 +70,7 @@ create table if not exists public.bursts (
   unique (user_id, id)
 );
 
-create table if not exists public.app_preferences (
+create table public.app_preferences (
   user_id uuid primary key references auth.users(id) on delete cascade,
   active_workspace_id text not null,
   elapsed_seconds integer not null default 0,
@@ -83,11 +89,11 @@ create table if not exists public.app_preferences (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
-create index if not exists workspaces_user_id_idx on public.workspaces(user_id);
-create index if not exists projects_user_id_idx on public.projects(user_id);
-create index if not exists outcomes_user_id_idx on public.outcomes(user_id);
-create index if not exists bursts_user_id_idx on public.bursts(user_id);
-create index if not exists bursts_logged_at_idx on public.bursts(user_id, logged_at desc);
+create index workspaces_user_id_idx on public.workspaces(user_id);
+create index projects_user_id_idx on public.projects(user_id);
+create index outcomes_user_id_idx on public.outcomes(user_id);
+create index bursts_user_id_idx on public.bursts(user_id);
+create index bursts_logged_at_idx on public.bursts(user_id, logged_at desc);
 
 alter table public.workspaces enable row level security;
 alter table public.projects enable row level security;
@@ -95,35 +101,30 @@ alter table public.outcomes enable row level security;
 alter table public.bursts enable row level security;
 alter table public.app_preferences enable row level security;
 
-drop policy if exists "users manage own workspaces" on public.workspaces;
 create policy "users manage own workspaces"
 on public.workspaces
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
-drop policy if exists "users manage own projects" on public.projects;
 create policy "users manage own projects"
 on public.projects
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
-drop policy if exists "users manage own outcomes" on public.outcomes;
 create policy "users manage own outcomes"
 on public.outcomes
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
-drop policy if exists "users manage own bursts" on public.bursts;
 create policy "users manage own bursts"
 on public.bursts
 for all
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 
-drop policy if exists "users manage own app_preferences" on public.app_preferences;
 create policy "users manage own app_preferences"
 on public.app_preferences
 for all

@@ -8,6 +8,7 @@ import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { usePersistentAppState } from "./hooks/usePersistentAppState";
+import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
 import {
   getActiveProject,
   getSelectedOutcome,
@@ -24,18 +25,21 @@ const THEME_STORAGE_KEY = "time-theme";
 type ThemeName = "blue" | "green" | "sakura";
 
 function App() {
-  const { state, dispatch, syncInfo, syncNow, pullFromRemote } = usePersistentAppState();
+  const { configured, allowedEmail, isLoading: isAuthLoading, isSendingMagicLink, user, error: authError, info: authInfo, sendMagicLink, signOut } = useSupabaseAuth();
+  const { state, dispatch, syncInfo, syncNow, pullFromRemote } = usePersistentAppState({ userId: user?.id || null });
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const timerCardRef = useRef<HTMLElement | null>(null);
   const previousCompletedSessionsRef = useRef(state.completedSessions);
   const [isTaskQueueExpanded, setIsTaskQueueExpanded] = useState(false);
+  const [isSelectedBurstHistoryOpen, setIsSelectedBurstHistoryOpen] = useState(false);
   const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
   const [isDesktopLayout, setIsDesktopLayout] = useState(false);
   const [isCompletionAlertVisible, setIsCompletionAlertVisible] = useState(false);
   const [completionBurstId, setCompletionBurstId] = useState<string | null>(null);
   const [completionSessionLabel, setCompletionSessionLabel] = useState("");
   const [isSyncInfoVisible, setIsSyncInfoVisible] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
   const [theme, setTheme] = useState<ThemeName>(() => {
     if (typeof window === "undefined") return "blue";
 
@@ -51,7 +55,7 @@ function App() {
   const projectOutcomes = useMemo(() => activeProject ? getOutcomesForProjectId(state, activeProject.id) : [], [activeProject, state]);
   const outcomeTypeOptions = useMemo(() => getOutcomeTypeOptions(state.customOutcomeTypes), [state.customOutcomeTypes]);
   const isOutcomeComposerOpen = state.isOutcomeFormOpen && !editingOutcome;
-  const shouldExpandTasksCard = isTaskQueueExpanded || state.isOutcomeFormOpen;
+  const shouldExpandTasksCard = isTaskQueueExpanded || isSelectedBurstHistoryOpen || state.isOutcomeFormOpen || state.isProjectMenuOpen;
   const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedOutcome);
   const selectedOutcomeContext = selectedOutcome && activeWorkspace && activeProject
     ? `${activeWorkspace.name} / ${activeProject.name}`
@@ -290,6 +294,8 @@ function App() {
 
   const syncStatusLabel = syncInfo.status === "disabled"
     ? "Local only"
+    : syncInfo.status === "auth_required"
+      ? "Sign in for Sync"
     : syncInfo.status === "connecting"
       ? "Connecting"
     : syncInfo.status === "syncing"
@@ -297,6 +303,15 @@ function App() {
       : syncInfo.status === "error"
         ? "Sync error"
           : "Connected";
+
+  async function handleSendMagicLink() {
+    const trimmed = authEmail.trim();
+    if (!trimmed) return;
+    const didSend = await sendMagicLink(trimmed);
+    if (didSend) {
+      setAuthEmail("");
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -353,6 +368,7 @@ function App() {
             outcomeTypeOptions={outcomeTypeOptions}
             isComposerOpen={isOutcomeComposerOpen}
             onQueueExpandedChange={setIsTaskQueueExpanded}
+            onSelectedBurstHistoryOpenChange={setIsSelectedBurstHistoryOpen}
             onSelectOutcome={(outcomeId) => dispatch({ type: "select-outcome", outcomeId })}
             onEditOutcome={(outcomeId) => dispatch({ type: "edit-outcome", outcomeId })}
             onToggleOutcome={(outcomeId) => dispatch({ type: "toggle-outcome", outcomeId })}
@@ -478,14 +494,56 @@ function App() {
             <div className="sync-info-note">
               Auto-upload runs 10 seconds after durable changes. Downloads only happen when you trigger them here.
             </div>
+            {configured ? (
+              <div className="sync-auth-panel">
+                <div className="sync-info-row">
+                  <span className="sync-info-label">Account</span>
+                  <span className="sync-info-value">
+                    {isAuthLoading ? "Checking session..." : (user?.email || "Not signed in")}
+                  </span>
+                </div>
+                {!user ? (
+                  <div className="sync-auth-form">
+                    <input
+                      className="sync-auth-input"
+                      type="email"
+                      placeholder={allowedEmail || "you@example.com"}
+                      aria-label="Email for Supabase magic link"
+                      value={authEmail}
+                      onChange={(event) => setAuthEmail(event.target.value)}
+                    />
+                    <button
+                      className="completion-alert-dismiss"
+                      type="button"
+                      onClick={() => void handleSendMagicLink()}
+                      disabled={isAuthLoading || isSendingMagicLink || !authEmail.trim()}
+                    >
+                      {isSendingMagicLink ? "Sending link..." : "Email magic link"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="sync-auth-actions">
+                    <button className="completion-alert-skip" type="button" onClick={() => void signOut()}>
+                      Sign out
+                    </button>
+                  </div>
+                )}
+                {allowedEmail ? (
+                  <div className="sync-auth-message">
+                    Only <strong>{allowedEmail}</strong> can sign in.
+                  </div>
+                ) : null}
+                {(authError || authInfo) ? (
+                  <div className={`sync-auth-message${authError ? " error" : ""}`}>
+                    {authError || authInfo}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <div className="sync-info-grid">
               <div className="sync-info-row">
                 <span className="sync-info-label">Status</span>
                 <span className={`sync-info-value${syncInfo.status === "error" ? " error" : ""}`}>{syncStatusLabel}</span>
-              </div>
-              <div className="sync-info-row">
-                <span className="sync-info-label">Instance</span>
-                <span className="sync-info-value">{syncInfo.instanceId || "Not set"}</span>
               </div>
               <div className="sync-info-row">
                 <span className="sync-info-label">Last sync</span>
@@ -501,12 +559,16 @@ function App() {
               </div>
             </div>
             <div className="sync-info-actions">
-              <button className="completion-alert-skip" type="button" onClick={() => void pullFromRemote()}>
-                Download from Supabase
-              </button>
-              <button className="completion-alert-skip" type="button" onClick={() => void syncNow()}>
-                Upload to Supabase
-              </button>
+              {user ? (
+                <>
+                  <button className="completion-alert-skip" type="button" onClick={() => void pullFromRemote()}>
+                    Download from Supabase
+                  </button>
+                  <button className="completion-alert-skip" type="button" onClick={() => void syncNow()}>
+                    Upload to Supabase
+                  </button>
+                </>
+              ) : null}
               <button className="completion-alert-dismiss" type="button" onClick={() => setIsSyncInfoVisible(false)}>
                 Close
               </button>

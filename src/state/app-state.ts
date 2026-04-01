@@ -612,6 +612,12 @@ function upsertBurst(bursts: Burst[], nextBurst: Burst): Burst[] {
   return bursts.map((burst) => burst.id === nextBurst.id ? nextBurst : burst);
 }
 
+function createEntityId(prefix: string, seed: number): string {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `${prefix}-${uuid}`;
+  return `${prefix}-${seed}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function buildLoggedBurstFromState(
   state: AppState,
   durationSeconds: number,
@@ -623,7 +629,7 @@ function buildLoggedBurstFromState(
   const outcome = state.outcomes.find((entry) => entry.id === state.activeOutcomeId) || null;
   if (!workspace || !project || !outcome) return null;
   return {
-    id: `burst-${loggedAt}`,
+    id: createEntityId("burst", loggedAt),
     workspaceId: workspace.id,
     projectId: project.id,
     outcomeId: outcome.id,
@@ -712,8 +718,8 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     }
     case "create-workspace": {
       const nextNumber = state.workspaces.length + 1;
-      const newWorkspaceId = `workspace-${action.now}`;
-      const firstProjectId = `${newWorkspaceId}-project-1`;
+      const newWorkspaceId = createEntityId("workspace", action.now);
+      const firstProjectId = createEntityId("project", action.now);
       return normalizeState({
         ...state,
         workspaces: [...state.workspaces, { id: newWorkspaceId, name: `Workspace ${nextNumber}`, activeProjectId: firstProjectId, visibleProjectIds: [firstProjectId] }],
@@ -760,7 +766,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "create-project": {
       const workspace = getActiveWorkspace(state);
       if (!workspace) return state;
-      const projectId = `${workspace.id}-project-${action.now}`;
+      const projectId = createEntityId("project", action.now);
       const nextProjects = [...state.projects, { id: projectId, workspaceId: workspace.id, name: `Project ${getProjectsForWorkspaceId(state, workspace.id).length + 1}` }];
       const nextState = {
         ...state,
@@ -858,7 +864,7 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const nextCustomTypes = customType && !state.customOutcomeTypes.includes(customType)
         ? [...state.customOutcomeTypes, customType].sort()
         : state.customOutcomeTypes;
-      const outcomeId = state.editingOutcomeId || `outcome-${action.now}`;
+      const outcomeId = state.editingOutcomeId || createEntityId("outcome", action.now);
       const nextOutcomes = state.editingOutcomeId
         ? state.outcomes.map((outcome) => outcome.id === state.editingOutcomeId
           ? { ...outcome, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible }

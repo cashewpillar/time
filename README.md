@@ -22,8 +22,13 @@ npm run build
 1. Create a Supabase project.
 2. Run the SQL in [`supabase/schema.sql`](/Users/halloween/Dev/apps/time/supabase/schema.sql) in the Supabase SQL editor.
 3. Copy [`.env.example`](/Users/halloween/Dev/apps/time/.env.example) to `.env.local`.
-4. Fill in `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
-5. Restart `npm run dev`.
+4. Fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_ALLOWED_EMAIL`.
+5. Enable Supabase Auth for email sign-in.
+6. In Supabase Auth, create or invite that exact email address as the only allowed user.
+7. Add your local/dev redirect URLs in Supabase Auth settings.
+8. Restart `npm run dev`.
+
+If you intentionally want to wipe and rebuild the sync tables during development, use [`supabase/reset.sql`](/Users/halloween/Dev/apps/time/supabase/reset.sql) instead. It is destructive.
 
 If those env vars are missing, the app stays on local-only persistence.
 
@@ -31,12 +36,12 @@ If those env vars are missing, the app stays on local-only persistence.
 
 Projects, workspaces, outcomes, session history, and timer progress are always saved in browser `localStorage` on the current device.
 
-When Supabase is configured, the app also syncs the normalized state model to:
-- `app_instances`
+When Supabase is configured and you sign in, the app syncs the normalized state model to:
 - `app_preferences`
 - `workspaces`
 - `projects`
 - `outcomes`
 - `bursts`
 
-The current sync model assumes a single local app instance per browser and does not include auth yet. Tighten security before using it beyond local/dev setups.
+The current sync model is user-scoped with Supabase Auth and RLS.
+The app also enforces a single allowed email address from `VITE_ALLOWED_EMAIL`.

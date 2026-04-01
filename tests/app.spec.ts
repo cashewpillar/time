@@ -159,3 +159,32 @@ test("manual log mode saves time against the selected outcome and shows entry hi
   await expect(page.locator(".burst-history-meta")).toContainText("00:30");
   await expect(page.locator(".timer-focus-name")).toContainText("Desk planning");
 });
+
+test("desktop task card expands for entry history and project dropdown overlays", async ({ page }) => {
+  const app = new AppPage(page);
+  const tasksSection = page.locator(".tasks-section-top");
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await app.createOutcome({
+    name: "Mobile planning",
+    type: "product",
+    notes: "Capture time manually from phone."
+  });
+  await app.createOutcome({
+    name: "Desk planning",
+    type: "design"
+  });
+  await app.logManualTime("00:30");
+
+  await expect(tasksSection).not.toHaveClass(/expanded/);
+
+  await page.getByRole("button", { name: "Show entry log", exact: true }).click();
+  await expect(tasksSection).toHaveClass(/expanded/);
+
+  await page.getByRole("button", { name: "Hide entry log", exact: true }).click();
+  await expect(tasksSection).not.toHaveClass(/expanded/);
+
+  await app.openProjectMenu();
+  await expect(tasksSection).toHaveClass(/expanded/);
+});
