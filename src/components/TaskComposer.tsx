@@ -98,7 +98,7 @@ export function TaskComposer({
     <>
       {!isOpen && !hideTrigger ? (
         <button className={`add-task-tile${highlightTrigger ? " idle-sheen" : ""}`} id="showTaskFormBtn" type="button" onClick={onOpen}>
-          ⊕ Add Task
+          ⊕ Add Outcome
         </button>
       ) : null}
 
@@ -113,7 +113,7 @@ export function TaskComposer({
                 type="text"
                 maxLength={100}
                 placeholder="What are you working on?"
-                aria-label="Task name"
+                aria-label="Outcome name"
                 value={form.text}
                 onChange={(event) => setForm((current) => ({ ...current, text: event.target.value }))}
               />
@@ -123,7 +123,7 @@ export function TaskComposer({
               <select
                 className="task-input task-type-select"
                 id="taskTypeInput"
-                aria-label="Task type"
+                aria-label="Outcome type"
                 value={form.type}
                 onChange={(event) => {
                   const nextType = event.target.value;
@@ -134,7 +134,7 @@ export function TaskComposer({
                   }));
                 }}
               >
-                <option value="">Select task type</option>
+                <option value="">Select outcome type</option>
                 {taskTypeOptions.map((type) => (
                   <option key={type} value={type}>
                     {type[0].toUpperCase() + type.slice(1)}
@@ -150,8 +150,8 @@ export function TaskComposer({
                 id="taskTypeCustomInput"
                 type="text"
                 maxLength={40}
-                placeholder="Add a task type"
-                aria-label="Add a task type"
+                placeholder="Add an outcome type"
+                aria-label="Add an outcome type"
                 value={form.customType}
                 onChange={(event) => setForm((current) => ({ ...current, customType: event.target.value }))}
               />
@@ -163,7 +163,7 @@ export function TaskComposer({
                 id="taskNotesInput"
                 maxLength={400}
                 placeholder="Notes"
-                aria-label="Task notes"
+                aria-label="Outcome notes"
                 value={form.notes}
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
               ></textarea>
@@ -186,7 +186,7 @@ export function TaskComposer({
 
             <div className="task-form-actions">
               <button className="task-form-btn primary" type="submit">
-                {editingTask ? "Save Changes" : "Save Task"}
+                {editingTask ? "Save Changes" : "Save Outcome"}
               </button>
               <button className="task-form-btn ghost" type="button" id="cancelTaskBtn" onClick={onCancel}>
                 Cancel

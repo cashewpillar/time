@@ -343,6 +343,7 @@ button {
 }
 
 .completion-alert-card {
+  --pill-strip-fade-color: var(--panel-strong);
   position: relative;
   z-index: 1;
   width: min(100%, 360px);
@@ -495,13 +496,13 @@ button {
   margin-bottom: 10px;
 }
 
-.timer-preset-scroll {
+.pill-strip-scroll {
   position: relative;
   overflow: hidden;
 }
 
-.timer-preset-scroll::before,
-.timer-preset-scroll::after {
+.pill-strip-scroll::before,
+.pill-strip-scroll::after {
   content: "";
   position: absolute;
   top: 0;
@@ -513,19 +514,19 @@ button {
   transition: opacity 140ms ease;
 }
 
-.timer-preset-scroll.fade-start::before {
+.pill-strip-scroll.fade-start::before {
   opacity: 1;
   left: 0;
-  background: linear-gradient(90deg, var(--fade-solid), transparent);
+  background: linear-gradient(90deg, var(--pill-strip-fade-color, var(--fade-solid)), transparent);
 }
 
-.timer-preset-scroll.fade-end::after {
+.pill-strip-scroll.fade-end::after {
   opacity: 1;
   right: 0;
-  background: linear-gradient(90deg, transparent, var(--fade-solid));
+  background: linear-gradient(90deg, transparent, var(--pill-strip-fade-color, var(--fade-solid)));
 }
 
-.timer-preset-list {
+.pill-strip-list {
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
@@ -540,19 +541,17 @@ button {
   scroll-behavior: smooth;
 }
 
-.timer-preset-list,
-.timer-preset-list *,
-.manual-slot-list,
-.manual-slot-list * {
+.pill-strip-list,
+.pill-strip-list * {
   -webkit-user-select: none;
   user-select: none;
 }
 
-.timer-preset-list::-webkit-scrollbar {
+.pill-strip-list::-webkit-scrollbar {
   height: 0;
 }
 
-.timer-preset-list[data-dragging="true"] {
+.pill-strip-list[data-dragging="true"] {
   cursor: grabbing;
 }
 
@@ -713,12 +712,11 @@ button {
 }
 
 .session-label-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  padding-right: 42px;
 }
 
 .session-label-chip {
+  flex: 0 0 auto;
   min-height: 34px;
   padding: 0 12px;
   border-radius: 999px;
@@ -733,8 +731,38 @@ button {
   color: var(--button-text);
 }
 
-.session-label-input {
-  min-height: 46px;
+.session-label-chip-custom {
+  min-height: 40px;
+}
+
+.session-label-input-inline {
+  width: 124px;
+  max-width: 28ch;
+  text-align: left;
+  padding-inline: 12px;
+}
+
+.session-label-input-inline::placeholder {
+  color: var(--text-faint);
+}
+
+.timer-preset-chip-custom-input {
+  width: 124px;
+}
+
+.session-label-chip-custom {
+  position: relative;
+}
+
+.session-label-input-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: pre;
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: normal;
+  padding-inline: 12px;
 }
 
 .timer-status {
@@ -1333,6 +1361,21 @@ button {
   color: var(--text-faint);
   font-size: 0.76rem;
   font-weight: 700;
+}
+
+.burst-history-toggle {
+  margin-top: 10px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.burst-history-toggle:hover {
+  color: var(--white);
 }
 
 .burst-history-list {

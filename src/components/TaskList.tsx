@@ -48,10 +48,15 @@ export function TaskList({
   const hasAnyTasks = Boolean(outcomes.length);
   const hasOtherTasks = queueTasks.length > 0;
   const [isQueueOpen, setIsQueueOpen] = useState(() => !hasOtherTasks);
+  const [isSelectedBurstHistoryOpen, setIsSelectedBurstHistoryOpen] = useState(false);
 
   useLayoutEffect(() => {
     setIsQueueOpen(!hasOtherTasks);
   }, [hasOtherTasks, project?.id]);
+
+  useEffect(() => {
+    setIsSelectedBurstHistoryOpen(false);
+  }, [activeTaskId]);
 
   useEffect(() => {
     onQueueExpandedChange(isQueueOpen && (queueTasks.length > 0 || selectedTask !== null));
@@ -81,6 +86,7 @@ export function TaskList({
     const outcomeBursts = getOutcomeBursts(task.id);
     const trackedSeconds = getOutcomeTrackedSeconds(task.id);
     const recentBursts = outcomeBursts.slice(0, isSelected ? 4 : 2);
+    const showBurstHistory = isSelected && isSelectedBurstHistoryOpen;
 
     return (
       <div key={task.id} className={`task-item${task.done ? " done" : ""}${isEditing ? " editing" : ""}${isSelected ? " selected" : " compact"}`}>
@@ -142,31 +148,49 @@ export function TaskList({
               </div>
               {recentBursts.length ? (
                 <>
-                  <div className={`burst-timeline${isSelected ? " selected" : ""}`}>
-                    {recentBursts.map((burst) => (
-                      <div key={burst.id} className="burst-pill">
-                        <span className="burst-pill-duration">{burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"}</span>
-                        <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {isSelected ? (
-                    <div className="burst-history-list">
+                  {!isSelected ? (
+                    <div className="burst-timeline">
                       {recentBursts.map((burst) => (
-                        <div key={`${burst.id}-history`} className="burst-history-item">
-                          <div className="burst-history-label">{buildBurstHistoryLabel(burst)}</div>
-                          <div className="burst-history-meta">
-                            {burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"} • {formatBurstTimestamp(burst.loggedAt)}
-                          </div>
+                        <div key={burst.id} className="burst-pill">
+                          <span className="burst-pill-duration">{burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"}</span>
+                          <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
                         </div>
                       ))}
                     </div>
+                  ) : null}
+                  {task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
+                  {isSelected ? (
+                    <>
+                      <button
+                        className="burst-history-toggle"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setIsSelectedBurstHistoryOpen((open) => !open);
+                        }}
+                        aria-expanded={showBurstHistory}
+                      >
+                        {showBurstHistory ? "Hide entry log" : "Show entry log"}
+                      </button>
+                      {showBurstHistory ? (
+                        <div className="burst-history-list">
+                          {recentBursts.map((burst) => (
+                            <div key={`${burst.id}-history`} className="burst-history-item">
+                              <div className="burst-history-label">{buildBurstHistoryLabel(burst)}</div>
+                              <div className="burst-history-meta">
+                                {burst.lastDurationSeconds ? formatManualDuration(burst.lastDurationSeconds) : "Done"} • {formatBurstTimestamp(burst.loggedAt)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                 </>
               ) : (
                 <div className="burst-empty">No bursts yet. Start the timer or log time to build history.</div>
               )}
-              {task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
+              {!recentBursts.length && task.notes ? <div className="task-notes-copy">{task.notes}</div> : null}
             </>
           )}
         </div>
@@ -199,7 +223,7 @@ export function TaskList({
       {queueTasks.length ? (
         <div className="task-queue">
           <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
-            <span className="task-queue-label">Other tasks</span>
+            <span className="task-queue-label">Other outcomes</span>
             <span className="task-queue-count">{queueTasks.length}</span>
             <span className="task-queue-caret">{isQueueOpen ? "Hide" : "Show"}</span>
           </button>
@@ -225,7 +249,7 @@ export function TaskList({
       ) : !editingTask ? (
         <div className="task-queue">
           <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
-            <span className="task-queue-label">{hasAnyTasks ? "Other tasks" : "Tasks"}</span>
+            <span className="task-queue-label">{hasAnyTasks ? "Other outcomes" : "Outcomes"}</span>
             <span className="task-queue-count">0</span>
             <span className="task-queue-caret">{isQueueOpen ? "Hide" : "Show"}</span>
           </button>
@@ -245,11 +269,11 @@ export function TaskList({
       ) : null}
 
       {!outcomes.length ? (
-        <div className="task-empty-state">Add a task, then pick it to start focusing.</div>
+        <div className="task-empty-state">Add an outcome, then pick it to start focusing.</div>
       ) : null}
 
       {outcomes.length && !selectedTask ? (
-        <div className="task-empty-state">Pick a task to lock in your focus session.</div>
+        <div className="task-empty-state">Pick an outcome to lock in your focus session.</div>
       ) : null}
 
       {!selectedTask && !queueTasks.length ? (

@@ -8,7 +8,6 @@ import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { usePersistentAppState } from "./hooks/usePersistentAppState";
-import type { RecentTaskSlot, Task } from "./types/app";
 import {
   getActiveProject,
   getSelectedTask,
@@ -16,7 +15,6 @@ import {
   buildBurstHistoryLabel,
   getEditingTask,
   getOutcomesForProjectId,
-  getRecentTaskSlots,
   getTaskTypeOptions,
   getVisibleProjects
 } from "./state/app-state";
@@ -50,7 +48,6 @@ function App() {
   const editingTask = useMemo(() => getEditingTask(state), [state]);
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace, state), [activeWorkspace, state]);
   const projectOutcomes = useMemo(() => activeProject ? getOutcomesForProjectId(state, activeProject.id) : [], [activeProject, state]);
-  const recentTaskSlots = useMemo(() => getRecentTaskSlots(state), [state]);
   const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
   const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
   const shouldExpandTasksCard = isTaskQueueExpanded || state.isTaskFormOpen;
@@ -235,17 +232,17 @@ function App() {
 
   function handleSaveTask(draft: { text: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
     if (!activeProject) {
-      dispatch({ type: "set-status", status: "Add a task name first." });
+      dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
     }
 
     if (!draft.text.trim()) {
-      dispatch({ type: "set-status", status: "Add a task name first." });
+      dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
     }
 
     if (draft.type === "__custom__" && !customType.trim()) {
-      dispatch({ type: "set-status", status: "Add a custom task type first." });
+      dispatch({ type: "set-status", status: "Add a custom outcome type first." });
       return;
     }
 
@@ -260,11 +257,7 @@ function App() {
   }
 
   async function handleManualLog(durationSeconds: number, slotId: string | null, sessionLabel: string): Promise<boolean> {
-    const selectedRecentSlot = slotId
-      ? recentTaskSlots.find((slot) => slot.id === slotId) || null
-      : null;
-
-    const activeSlot = selectedRecentSlot || (selectedTask && activeWorkspace && activeProject
+    const activeSlot = selectedTask && activeWorkspace && activeProject
       ? {
           id: `recent-task-slot-${Date.now()}`,
         taskId: selectedTask.id,
@@ -280,10 +273,10 @@ function App() {
           lastDurationSeconds: null,
           loggedAt: Date.now()
         }
-      : null);
+      : null;
 
     if (!activeSlot) {
-      dispatch({ type: "set-status", status: "Pick a current task or a recent slot first." });
+      dispatch({ type: "set-status", status: "Pick a current outcome first." });
       return false;
     }
 
@@ -303,48 +296,6 @@ function App() {
     dispatch({ type: "set-status", status: `Time spent set to ${Math.floor(durationSeconds / 3600)
       .toString()
       .padStart(2, "0")}:${Math.floor((durationSeconds % 3600) / 60).toString().padStart(2, "0")}.` });
-  }
-
-  function matchesRecentSlotTask(task: Task, slot: RecentTaskSlot): boolean {
-    return task.text.trim() === slot.taskText.trim()
-      && task.type.trim() === slot.taskType.trim()
-      && task.notes.trim() === slot.taskNotes.trim();
-  }
-
-  function handleSelectRecentSlot(slot: RecentTaskSlot) {
-    const targetWorkspace = state.workspaces.find((workspace) => workspace.id === slot.workspaceId) || null;
-    if (!targetWorkspace) return;
-
-    const targetProject = state.projects.find((project) => project.id === slot.projectId) || null;
-    if (!targetProject) return;
-
-    const projectTasks = getOutcomesForProjectId(state, targetProject.id).map((outcome) => ({
-      id: outcome.id,
-      text: outcome.title,
-      type: outcome.type,
-      notes: outcome.notes,
-      agentEligible: outcome.agentEligible,
-      done: outcome.done
-    }));
-    const matchedTask = projectTasks.find((task) => task.id === slot.taskId)
-      || projectTasks.find((task) => matchesRecentSlotTask(task, slot))
-      || projectTasks.find((task) => task.text.trim() === slot.taskText.trim() && !task.notes.trim() && !slot.taskNotes.trim())
-      || null;
-
-    if (targetWorkspace.id !== state.activeWorkspaceId) {
-      dispatch({ type: "select-workspace", workspaceId: targetWorkspace.id });
-    }
-
-    if (targetProject.id !== targetWorkspace.activeProjectId || targetWorkspace.id !== state.activeWorkspaceId) {
-      dispatch({ type: "select-project", projectId: targetProject.id });
-    }
-
-    if (matchedTask) {
-      dispatch({ type: "select-task", taskId: matchedTask.id });
-      return;
-    }
-
-    dispatch({ type: "restore-recent-task", slot, now: Date.now() });
   }
 
   function handleSaveCompletionSessionLabel() {
@@ -428,15 +379,12 @@ function App() {
             isRunning={state.isRunning}
             selectedTaskName={selectedTask?.text || null}
             selectedTaskContext={selectedTaskContext}
-            recentTaskSlots={recentTaskSlots}
             timerStatusMessage={timerStatusMessage}
             shouldHighlightStart={shouldHighlightTimerStart}
             onToggleTimer={handleToggleTimer}
             onReset={() => dispatch({ type: "reset-timer" })}
             onCommitTarget={handleCommitTarget}
             onPreviewManualDuration={handlePreviewManualDuration}
-            onSelectRecentSlot={handleSelectRecentSlot}
-            onClearRecentSlots={() => dispatch({ type: "clear-recent-task-slots" })}
             onManualLog={handleManualLog}
           />
         </section>
