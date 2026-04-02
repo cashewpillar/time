@@ -25,7 +25,7 @@ const THEME_STORAGE_KEY = "time-theme";
 type ThemeName = "blue" | "green" | "sakura";
 
 function App() {
-  const { configured, allowedEmail, isLoading: isAuthLoading, isSendingMagicLink, user, error: authError, info: authInfo, sendMagicLink, signOut } = useSupabaseAuth();
+  const { configured, isLoading: isAuthLoading, isSigningIn, user, error: authError, info: authInfo, signInWithPassword, signOut } = useSupabaseAuth();
   const { state, dispatch, syncInfo, syncNow, pullFromRemote } = usePersistentAppState({ userId: user?.id || null });
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
@@ -40,6 +40,7 @@ function App() {
   const [completionSessionLabel, setCompletionSessionLabel] = useState("");
   const [isSyncInfoVisible, setIsSyncInfoVisible] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [theme, setTheme] = useState<ThemeName>(() => {
     if (typeof window === "undefined") return "blue";
 
@@ -303,14 +304,20 @@ function App() {
       : syncInfo.status === "error"
         ? "Sync error"
           : "Connected";
+  const syncStatusDetail = syncInfo.status === "connected" && syncInfo.pendingUploadSeconds
+    ? `upload in ${syncInfo.pendingUploadSeconds}s`
+    : syncInfo.status === "connected" && syncInfo.lastSyncedAt
+        ? "synced"
+        : null;
+  const syncTriggerLabel = syncStatusDetail ? `${syncStatusLabel} · ${syncStatusDetail}` : syncStatusLabel;
 
-  async function handleSendMagicLink() {
+  async function handlePasswordSignIn() {
     const trimmed = authEmail.trim();
-    if (!trimmed) return;
-    const didSend = await sendMagicLink(trimmed);
-    if (didSend) {
-      setAuthEmail("");
-    }
+    if (!trimmed || !authPassword.trim()) return;
+    const didSignIn = await signInWithPassword(trimmed, authPassword);
+    if (!didSignIn) return;
+
+    setAuthPassword("");
   }
 
   return (
@@ -334,7 +341,7 @@ function App() {
           type="button"
           onClick={() => setIsSyncInfoVisible(true)}
         >
-          {syncStatusLabel}
+          {syncTriggerLabel}
         </button>
       </header>
 
@@ -490,9 +497,14 @@ function App() {
           ></button>
 
           <div className="sync-info-card">
-            <div className="sync-info-title" id="syncInfoTitle">Supabase Sync</div>
-            <div className="sync-info-note">
-              Auto-upload runs 10 seconds after durable changes. Downloads only happen when you trigger them here.
+            <div className="sync-info-title-row">
+              <div className="sync-info-title" id="syncInfoTitle">Supabase Sync</div>
+              <button
+                className="sync-info-tooltip"
+                type="button"
+                aria-label="Sync details"
+                data-tooltip="Auto-upload runs 10 seconds after durable changes. Downloads only happen when you trigger them here."
+              ></button>
             </div>
             {configured ? (
               <div className="sync-auth-panel">
@@ -507,18 +519,26 @@ function App() {
                     <input
                       className="sync-auth-input"
                       type="email"
-                      placeholder={allowedEmail || "you@example.com"}
-                      aria-label="Email for Supabase magic link"
+                      placeholder="Email"
+                      aria-label="Email for Supabase sign in"
                       value={authEmail}
                       onChange={(event) => setAuthEmail(event.target.value)}
+                    />
+                    <input
+                      className="sync-auth-input"
+                      type="password"
+                      placeholder="Password"
+                      aria-label="Password for Supabase sign in"
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
                     />
                     <button
                       className="completion-alert-dismiss"
                       type="button"
-                      onClick={() => void handleSendMagicLink()}
-                      disabled={isAuthLoading || isSendingMagicLink || !authEmail.trim()}
+                      onClick={() => void handlePasswordSignIn()}
+                      disabled={isAuthLoading || isSigningIn || !authEmail.trim() || !authPassword.trim()}
                     >
-                      {isSendingMagicLink ? "Sending link..." : "Email magic link"}
+                      {isSigningIn ? "Signing in..." : "Sign in with Password"}
                     </button>
                   </div>
                 ) : (
@@ -528,9 +548,9 @@ function App() {
                     </button>
                   </div>
                 )}
-                {allowedEmail ? (
+                {!user ? (
                   <div className="sync-auth-message">
-                    Only <strong>{allowedEmail}</strong> can sign in.
+                    Only one approved account is authorized to use sync.
                   </div>
                 ) : null}
                 {(authError || authInfo) ? (

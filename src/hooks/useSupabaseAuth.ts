@@ -3,23 +3,24 @@ import type { User } from "@supabase/supabase-js";
 import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabase";
 
 const ALLOWED_EMAIL = import.meta.env.VITE_ALLOWED_EMAIL?.trim().toLowerCase() || null;
+const SINGLE_ACCOUNT_MESSAGE = "This app is limited to one approved account.";
 
 export type SupabaseAuthState = {
   configured: boolean;
   allowedEmail: string | null;
   isLoading: boolean;
-  isSendingMagicLink: boolean;
+  isSigningIn: boolean;
   user: User | null;
   error: string | null;
   info: string | null;
-  sendMagicLink: (email: string) => Promise<boolean>;
+  signInWithPassword: (email: string, password: string) => Promise<boolean>;
   signOut: () => Promise<void>;
 };
 
 export function useSupabaseAuth(): SupabaseAuthState {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(() => isSupabaseConfigured());
-  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -60,7 +61,7 @@ export function useSupabaseAuth(): SupabaseAuthState {
           if (nextUser && !isAllowedEmail(nextUser.email)) {
             void client.auth.signOut();
             setUser(null);
-            setError(ALLOWED_EMAIL ? `Only ${ALLOWED_EMAIL} is allowed to sign in.` : "This email is not allowed.");
+            setError(SINGLE_ACCOUNT_MESSAGE);
             return;
           }
           setUser(nextUser);
@@ -80,7 +81,7 @@ export function useSupabaseAuth(): SupabaseAuthState {
       if (nextUser && !isAllowedEmail(nextUser.email)) {
         void client.auth.signOut();
         setUser(null);
-        setError(ALLOWED_EMAIL ? `Only ${ALLOWED_EMAIL} is allowed to sign in.` : "This email is not allowed.");
+        setError(SINGLE_ACCOUNT_MESSAGE);
         setIsLoading(false);
         return;
       }
@@ -95,32 +96,32 @@ export function useSupabaseAuth(): SupabaseAuthState {
     };
   }, []);
 
-  async function sendMagicLink(email: string): Promise<boolean> {
+  async function signInWithPassword(email: string, password: string): Promise<boolean> {
     const client = getSupabaseClient();
     if (!client) return false;
 
     const normalizedEmail = email.trim().toLowerCase();
+    const trimmedPassword = password.trim();
     setError(null);
     setInfo(null);
-    setIsSendingMagicLink(true);
+    setIsSigningIn(true);
 
     if (!isAllowedEmail(normalizedEmail)) {
-      setError(ALLOWED_EMAIL ? `Only ${ALLOWED_EMAIL} can sign in here.` : "This email is not allowed.");
-      setIsSendingMagicLink(false);
+      setError(SINGLE_ACCOUNT_MESSAGE);
+      setIsSigningIn(false);
       return false;
     }
 
-    const redirectTo = typeof window === "undefined"
-      ? undefined
-      : new URL("/time/", window.location.origin).toString();
+    if (!trimmedPassword) {
+      setError("Enter your password to sign in.");
+      setIsSigningIn(false);
+      return false;
+    }
 
     try {
-      const { error: authError } = await client.auth.signInWithOtp({
+      const { error: authError } = await client.auth.signInWithPassword({
         email: normalizedEmail,
-        options: {
-          emailRedirectTo: redirectTo,
-          shouldCreateUser: false
-        }
+        password: trimmedPassword
       });
 
       if (authError) {
@@ -128,10 +129,10 @@ export function useSupabaseAuth(): SupabaseAuthState {
         return false;
       }
 
-      setInfo(`Magic link sent to ${normalizedEmail}.`);
+      setInfo(`Signed in as ${normalizedEmail}.`);
       return true;
     } finally {
-      setIsSendingMagicLink(false);
+      setIsSigningIn(false);
     }
   }
 
@@ -153,11 +154,11 @@ export function useSupabaseAuth(): SupabaseAuthState {
     configured: isSupabaseConfigured(),
     allowedEmail: ALLOWED_EMAIL,
     isLoading,
-    isSendingMagicLink,
+    isSigningIn,
     user,
     error,
     info,
-    sendMagicLink,
+    signInWithPassword,
     signOut
   };
 }

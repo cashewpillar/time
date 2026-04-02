@@ -19,6 +19,8 @@ export type SyncInfo = {
   status: SyncStatus;
   lastSyncedAt: number | null;
   lastError: string | null;
+  pendingUploadAt: number | null;
+  pendingUploadSeconds: number | null;
 };
 
 type PersistentAppStateResult = {
@@ -71,7 +73,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
     enabled: isSupabaseSyncEnabled(),
     status: !isSupabaseSyncEnabled() ? "disabled" : (userId ? "connecting" : "auth_required"),
     lastSyncedAt: null,
-    lastError: null
+    lastError: null,
+    pendingUploadAt: null,
+    pendingUploadSeconds: null
   }));
   const lastUploadedFingerprintRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
@@ -87,7 +91,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
       enabled: isSupabaseSyncEnabled(),
       status: !isSupabaseSyncEnabled()
         ? "disabled"
-        : (userId ? (current.status === "syncing" ? "syncing" : "connected") : "auth_required")
+        : (userId ? (current.status === "syncing" ? "syncing" : "connected") : "auth_required"),
+      pendingUploadAt: userId ? current.pendingUploadAt : null,
+      pendingUploadSeconds: userId ? current.pendingUploadSeconds : null
     }));
   }, [userId]);
 
@@ -125,7 +131,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
           ...current,
           enabled: true,
           status: "connected",
-          lastError: null
+          lastError: null,
+          pendingUploadAt: null,
+          pendingUploadSeconds: null
         }));
       } catch (error) {
         console.error("Unable to load state from Supabase.", error);
@@ -152,12 +160,38 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
     if (!isSupabaseSyncEnabled() || !userId) return;
     if (lastUploadedFingerprintRef.current === autoSyncFingerprint) return;
 
+    const pendingUploadAt = Date.now() + 10000;
+    setSyncInfo((current) => ({
+      ...current,
+      enabled: true,
+      status: current.status === "error" ? current.status : "connected",
+      lastError: current.status === "error" ? current.lastError : null,
+      pendingUploadAt,
+      pendingUploadSeconds: Math.max(1, Math.ceil((pendingUploadAt - Date.now()) / 1000))
+    }));
+
+    const intervalId = window.setInterval(() => {
+      setSyncInfo((current) => {
+        if (!current.pendingUploadAt) return current;
+
+        const remainingSeconds = Math.max(1, Math.ceil((current.pendingUploadAt - Date.now()) / 1000));
+        if (remainingSeconds === current.pendingUploadSeconds) return current;
+
+        return {
+          ...current,
+          pendingUploadSeconds: remainingSeconds
+        };
+      });
+    }, 250);
+
     const timeoutId = window.setTimeout(() => {
       setSyncInfo((current) => ({
         ...current,
         enabled: true,
         status: "syncing",
-        lastError: null
+        lastError: null,
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
       }));
 
       void saveStateToSupabase(userId, state)
@@ -168,7 +202,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
             enabled: true,
             status: "connected",
             lastSyncedAt: Date.now(),
-            lastError: null
+            lastError: null,
+            pendingUploadAt: null,
+            pendingUploadSeconds: null
           }));
         })
         .catch((error) => {
@@ -177,12 +213,17 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
             ...current,
             enabled: true,
             status: "error",
-            lastError: error instanceof Error ? error.message : "Unknown Supabase save error."
+            lastError: error instanceof Error ? error.message : "Unknown Supabase save error.",
+            pendingUploadAt: null,
+            pendingUploadSeconds: null
           }));
         });
     }, 10000);
 
-    return () => window.clearTimeout(timeoutId);
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
   }, [autoSyncFingerprint, state, userId]);
 
   async function syncNow(): Promise<void> {
@@ -192,7 +233,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
       ...current,
       enabled: true,
       status: "syncing",
-      lastError: null
+      lastError: null,
+      pendingUploadAt: null,
+      pendingUploadSeconds: null
     }));
 
     try {
@@ -203,7 +246,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         enabled: true,
         status: "connected",
         lastSyncedAt: Date.now(),
-        lastError: null
+        lastError: null,
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
       }));
     } catch (error) {
       console.error("Unable to sync state to Supabase.", error);
@@ -211,7 +256,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         ...current,
         enabled: true,
         status: "error",
-        lastError: error instanceof Error ? error.message : "Unknown Supabase sync error."
+        lastError: error instanceof Error ? error.message : "Unknown Supabase sync error.",
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
       }));
     }
   }
@@ -223,7 +270,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
       ...current,
       enabled: true,
       status: "syncing",
-      lastError: null
+      lastError: null,
+      pendingUploadAt: null,
+      pendingUploadSeconds: null
     }));
 
     try {
@@ -233,7 +282,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
           ...current,
           enabled: true,
           status: "connected",
-          lastError: "No remote data found for this account."
+          lastError: "No remote data found for this account.",
+          pendingUploadAt: null,
+          pendingUploadSeconds: null
         }));
         return;
       }
@@ -257,7 +308,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         enabled: true,
         status: "connected",
         lastSyncedAt: Date.now(),
-        lastError: null
+        lastError: null,
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
       }));
     } catch (error) {
       console.error("Unable to pull state from Supabase.", error);
@@ -265,7 +318,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         ...current,
         enabled: true,
         status: "error",
-        lastError: error instanceof Error ? error.message : "Unknown Supabase pull error."
+        lastError: error instanceof Error ? error.message : "Unknown Supabase pull error.",
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
       }));
     }
   }

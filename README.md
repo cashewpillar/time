@@ -23,10 +23,9 @@ npm run build
 2. Run the SQL in [`supabase/schema.sql`](/Users/halloween/Dev/apps/time/supabase/schema.sql) in the Supabase SQL editor.
 3. Copy [`.env.example`](/Users/halloween/Dev/apps/time/.env.example) to `.env.local`.
 4. Fill in `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, and `VITE_ALLOWED_EMAIL`.
-5. Enable Supabase Auth for email sign-in.
-6. In Supabase Auth, create or invite that exact email address as the only allowed user.
-7. Add your local/dev redirect URLs in Supabase Auth settings.
-8. Restart `npm run dev`.
+5. Enable Supabase Auth for email/password sign-in.
+6. In Supabase Auth, create that exact email address as the only allowed user and set its password.
+7. Restart `npm run dev`.
 
 If you intentionally want to wipe and rebuild the sync tables during development, use [`supabase/reset.sql`](/Users/halloween/Dev/apps/time/supabase/reset.sql) instead. It is destructive.
 
