@@ -1593,38 +1593,6 @@ button {
   color: var(--white);
 }
 
-.burst-timeline {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.burst-timeline.selected {
-  margin-top: 12px;
-}
-
-.burst-pill {
-  display: grid;
-  gap: 2px;
-  min-width: 96px;
-  padding: 8px 10px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.burst-pill-duration {
-  color: var(--white);
-  font-size: 0.78rem;
-  font-weight: 800;
-}
-
-.burst-pill-time {
-  color: var(--text-soft);
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
 .burst-empty {
   margin-top: 10px;
   color: var(--text-faint);

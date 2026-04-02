@@ -118,7 +118,6 @@ export function TaskList({
     const isEditing = editingOutcome?.id === outcome.id;
     const outcomeBursts = getOutcomeBursts(outcome.id);
     const trackedSeconds = getOutcomeTrackedSeconds(outcome.id);
-    const previewBursts = outcomeBursts.slice(0, 2);
     const historyBursts = outcomeBursts;
     const showBurstHistory = isSelected && isSelectedBurstHistoryOpen;
 
@@ -182,16 +181,6 @@ export function TaskList({
               </div>
               {outcomeBursts.length ? (
                 <>
-                  {!isSelected ? (
-                    <div className="burst-timeline">
-                      {previewBursts.map((burst) => (
-                        <div key={burst.id} className="burst-pill">
-                          <span className="burst-pill-duration">{formatManualDuration(burst.durationSeconds)}</span>
-                          <span className="burst-pill-time">{formatBurstTimestamp(burst.loggedAt)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
                   {outcome.notes ? <div className="task-notes-copy">{outcome.notes}</div> : null}
                   {isSelected ? (
                     <>
