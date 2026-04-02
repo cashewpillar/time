@@ -45,8 +45,29 @@ export function TaskList({
   onCancelComposer,
   onSaveOutcome
 }: TaskListProps) {
+  function getOutcomeBursts(outcomeId: string): Burst[] {
+    return bursts
+      .filter((burst) => burst.outcomeId === outcomeId)
+      .sort((left, right) => right.loggedAt - left.loggedAt);
+  }
+
+  function getLatestBurstLoggedAt(outcomeId: string): number {
+    return getOutcomeBursts(outcomeId)[0]?.loggedAt || 0;
+  }
+
   const selectedOutcome = outcomes.find((outcome) => outcome.id === activeOutcomeId) || null;
-  const queuedOutcomes = outcomes.filter((outcome) => outcome.id !== activeOutcomeId);
+  const queuedOutcomes = outcomes
+    .filter((outcome) => outcome.id !== activeOutcomeId)
+    .sort((left, right) => {
+      const rightLatest = getLatestBurstLoggedAt(right.id);
+      const leftLatest = getLatestBurstLoggedAt(left.id);
+
+      if (rightLatest !== leftLatest) {
+        return rightLatest - leftLatest;
+      }
+
+      return outcomes.findIndex((outcome) => outcome.id === left.id) - outcomes.findIndex((outcome) => outcome.id === right.id);
+    });
   const hasAnyTasks = Boolean(outcomes.length);
   const hasOtherTasks = queuedOutcomes.length > 0;
   const [isQueueOpen, setIsQueueOpen] = useState(() => !hasOtherTasks);
@@ -95,12 +116,6 @@ export function TaskList({
     };
   }, [isSelectedBurstHistoryOpen, activeOutcomeId, bursts]);
 
-  function getOutcomeBursts(outcomeId: string): Burst[] {
-    return bursts
-      .filter((burst) => burst.outcomeId === outcomeId)
-      .sort((left, right) => right.loggedAt - left.loggedAt);
-  }
-
   function getOutcomeTrackedSeconds(outcomeId: string): number {
     return getOutcomeBursts(outcomeId)
       .reduce((sum, burst) => sum + burst.durationSeconds, 0);
@@ -108,7 +123,10 @@ export function TaskList({
 
   function formatBurstTimestamp(timestamp: number): string {
     if (!timestamp) return "Saved from backlog";
-    return new Date(timestamp).toLocaleTimeString([], {
+    return new Date(timestamp).toLocaleString([], {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
       hour: "numeric",
       minute: "2-digit"
     });

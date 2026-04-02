@@ -201,6 +201,34 @@ test("manual log mode saves time against the selected outcome and shows entry hi
   await expect(page.locator(".timer-focus-name")).toContainText("Desk planning");
 });
 
+test("other outcomes are sorted by latest tracked burst", async ({ page }) => {
+  const app = new AppPage(page);
+
+  await app.createOutcome({
+    name: "Alpha planning",
+    type: "product"
+  });
+  await app.createOutcome({
+    name: "Beta planning",
+    type: "design"
+  });
+  await app.createOutcome({
+    name: "Gamma planning",
+    type: "development"
+  });
+
+  await app.selectOutcome("Alpha planning");
+  await app.logManualTime("00:30");
+
+  await app.selectOutcome("Beta planning");
+  await app.logManualTime("00:45");
+
+  await app.selectOutcome("Gamma planning");
+
+  const queueNames = await page.locator(".task-queue-list .task-name").allTextContents();
+  expect(queueNames).toEqual(["Beta planning", "Alpha planning"]);
+});
+
 test("desktop task card expands for entry history and project dropdown overlays", async ({ page }) => {
   const app = new AppPage(page);
   const tasksSection = page.locator(".tasks-section-top");
