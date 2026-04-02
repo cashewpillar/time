@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { AppPage } from "./app.page";
-import { loadStateFromStorageValue, serializeStateForStorage } from "../src/state/app-state";
+import { buildSyncFingerprint } from "../src/lib/sync-fingerprint";
+import { buildIncrementalSyncPlan } from "../src/lib/sync-plan";
+import { appReducer, defaultState, loadStateFromStorageValue, serializeStateForStorage } from "../src/state/app-state";
 
 test("migrates local state into normalized cache with derived outcomes", async () => {
   const legacyState = {
@@ -52,6 +54,45 @@ test("migrates local state into normalized cache with derived outcomes", async (
   const hydratedProjectOutcomes = hydrated.outcomes.filter((outcome) => outcome.projectId === "workspace-2-project-2");
   expect(hydratedProjectOutcomes).toHaveLength(1);
   expect(hydrated.bursts).toHaveLength(0);
+});
+
+test("sync fingerprint ignores navigation-only project selection", () => {
+  const before = defaultState();
+  const after = appReducer(before, { type: "select-project", projectId: "workspace-2-project-3" });
+
+  expect(buildSyncFingerprint(after)).toBe(buildSyncFingerprint(before));
+});
+
+test("sync fingerprint changes for durable project edits", () => {
+  const before = defaultState();
+  const after = appReducer(before, { type: "rename-project", projectId: "workspace-2-project-2", name: "Roadmap" });
+
+  expect(buildSyncFingerprint(after)).not.toBe(buildSyncFingerprint(before));
+});
+
+test("incremental sync plan skips project selection churn", () => {
+  const before = defaultState();
+  const after = appReducer(before, { type: "select-project", projectId: "workspace-2-project-3" });
+  const plan = buildIncrementalSyncPlan(before, after);
+
+  expect(plan.workspacesToUpsert).toHaveLength(0);
+  expect(plan.projectsToUpsert).toHaveLength(0);
+  expect(plan.outcomesToUpsert).toHaveLength(0);
+  expect(plan.burstsToUpsert).toHaveLength(0);
+  expect(plan.shouldUpsertPreferences).toBe(false);
+});
+
+test("incremental sync plan sends only changed durable records", () => {
+  const before = defaultState();
+  const after = appReducer(before, { type: "rename-project", projectId: "workspace-2-project-2", name: "Roadmap" });
+  const plan = buildIncrementalSyncPlan(before, after);
+
+  expect(plan.projectsToUpsert).toHaveLength(1);
+  expect(plan.projectsToUpsert[0].id).toBe("workspace-2-project-2");
+  expect(plan.projectsToUpsert[0].name).toBe("Roadmap");
+  expect(plan.workspacesToUpsert).toHaveLength(0);
+  expect(plan.outcomesToUpsert).toHaveLength(0);
+  expect(plan.burstsToUpsert).toHaveLength(0);
 });
 
 test.beforeEach(async ({ page }) => {

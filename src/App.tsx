@@ -26,7 +26,7 @@ type ThemeName = "blue" | "green" | "sakura";
 
 function App() {
   const { configured, isLoading: isAuthLoading, isSigningIn, user, error: authError, info: authInfo, signInWithPassword, signOut } = useSupabaseAuth();
-  const { state, dispatch, syncInfo, syncNow, pullFromRemote } = usePersistentAppState({ userId: user?.id || null });
+  const { state, dispatch, syncInfo, syncNow, forceFullSync, pullFromRemote } = usePersistentAppState({ userId: user?.id || null });
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const timerCardRef = useRef<HTMLElement | null>(null);
@@ -503,7 +503,7 @@ function App() {
                 className="sync-info-tooltip"
                 type="button"
                 aria-label="Sync details"
-                data-tooltip="Auto-upload runs 10 seconds after durable changes. Downloads only happen when you trigger them here."
+                data-tooltip="Auto-upload runs 10 seconds after durable changes and only sends changed records. Downloads only happen when you trigger them here."
               ></button>
             </div>
             {configured ? (
@@ -585,8 +585,18 @@ function App() {
                     Download from Supabase
                   </button>
                   <button className="completion-alert-skip" type="button" onClick={() => void syncNow()}>
-                    Upload to Supabase
+                    Sync Changed Data
                   </button>
+                  <span
+                    className="sync-action-tooltip-wrap"
+                    tabIndex={0}
+                    aria-label="Emergency full sync details"
+                    data-tooltip="Emergency only. Re-uploads the full local dataset to rebuild Supabase if incremental sync ever gets out of shape."
+                  >
+                    <button className="sync-emergency-btn" type="button" onClick={() => void forceFullSync()}>
+                      Emergency Full Sync
+                    </button>
+                  </span>
                 </>
               ) : null}
               <button className="completion-alert-dismiss" type="button" onClick={() => setIsSyncInfoVisible(false)}>

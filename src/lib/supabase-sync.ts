@@ -1,4 +1,5 @@
 import type { AppState, Burst, Outcome, Project, Workspace } from "../types/app";
+import { buildIncrementalSyncPlan } from "./sync-plan";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 
 type WorkspaceRow = {
@@ -72,6 +73,23 @@ export function isSupabaseSyncEnabled(): boolean {
   return isSupabaseConfigured();
 }
 
+async function deleteRowsByIds(
+  table: "workspaces" | "projects" | "outcomes" | "bursts",
+  userId: string,
+  ids: string[]
+) {
+  const client = getSupabaseClient();
+  if (!client) return;
+  if (!ids.length) return;
+
+  const { error: deleteError } = await client
+    .from(table)
+    .delete()
+    .eq("user_id", userId)
+    .in("id", ids);
+  if (deleteError) throw deleteError;
+}
+
 async function deleteMissingRows(
   table: "workspaces" | "projects" | "outcomes" | "bursts",
   userId: string,
@@ -87,14 +105,27 @@ async function deleteMissingRows(
     .map((row) => row.id as string)
     .filter((id) => !desiredIds.includes(id));
 
-  if (!staleIds.length) return;
+  await deleteRowsByIds(table, userId, staleIds);
+}
 
-  const { error: deleteError } = await client
-    .from(table)
-    .delete()
-    .eq("user_id", userId)
-    .in("id", staleIds);
-  if (deleteError) throw deleteError;
+function buildPreferencesRow(userId: string, state: AppState, updatedAt: string, previousState?: AppState | null): AppPreferencesRow {
+  return {
+    user_id: userId,
+    active_workspace_id: previousState?.activeWorkspaceId ?? state.activeWorkspaceId,
+    elapsed_seconds: previousState?.elapsedSeconds ?? state.elapsedSeconds,
+    target_seconds: previousState?.targetSeconds ?? state.targetSeconds,
+    is_running: previousState?.isRunning ?? state.isRunning,
+    completed_sessions: previousState?.completedSessions ?? state.completedSessions,
+    last_tick_at: previousState?.lastTickAt ?? state.lastTickAt,
+    active_outcome_id: previousState?.activeOutcomeId ?? state.activeOutcomeId,
+    is_outcome_form_open: previousState?.isOutcomeFormOpen ?? state.isOutcomeFormOpen,
+    editing_outcome_id: previousState?.editingOutcomeId ?? state.editingOutcomeId,
+    is_workspace_menu_open: previousState?.isWorkspaceMenuOpen ?? state.isWorkspaceMenuOpen,
+    is_project_menu_open: previousState?.isProjectMenuOpen ?? state.isProjectMenuOpen,
+    custom_outcome_types: state.customOutcomeTypes,
+    status: previousState?.status ?? state.status,
+    updated_at: updatedAt
+  };
 }
 
 export async function loadStateFromSupabase(userId: string): Promise<Partial<AppState> | null> {
@@ -173,7 +204,7 @@ export async function loadStateFromSupabase(userId: string): Promise<Partial<App
   };
 }
 
-export async function saveStateToSupabase(userId: string, state: AppState): Promise<void> {
+export async function saveFullStateToSupabase(userId: string, state: AppState): Promise<void> {
   const client = getSupabaseClient();
   if (!client) return;
 
@@ -228,23 +259,7 @@ export async function saveStateToSupabase(userId: string, state: AppState): Prom
     updated_at: updatedAt
   }));
 
-  const preferencesRow: AppPreferencesRow = {
-    user_id: userId,
-    active_workspace_id: state.activeWorkspaceId,
-    elapsed_seconds: state.elapsedSeconds,
-    target_seconds: state.targetSeconds,
-    is_running: state.isRunning,
-    completed_sessions: state.completedSessions,
-    last_tick_at: state.lastTickAt,
-    active_outcome_id: state.activeOutcomeId,
-    is_outcome_form_open: state.isOutcomeFormOpen,
-    editing_outcome_id: state.editingOutcomeId,
-    is_workspace_menu_open: state.isWorkspaceMenuOpen,
-    is_project_menu_open: state.isProjectMenuOpen,
-    custom_outcome_types: state.customOutcomeTypes,
-    status: state.status,
-    updated_at: updatedAt
-  };
+  const preferencesRow = buildPreferencesRow(userId, state, updatedAt);
 
   if (workspaceRows.length) {
     const { error } = await client.from("workspaces").upsert(workspaceRows, { onConflict: "user_id,id" });
@@ -273,4 +288,98 @@ export async function saveStateToSupabase(userId: string, state: AppState): Prom
   await deleteMissingRows("outcomes", userId, state.outcomes.map((outcome) => outcome.id));
   await deleteMissingRows("projects", userId, state.projects.map((project) => project.id));
   await deleteMissingRows("workspaces", userId, state.workspaces.map((workspace) => workspace.id));
+}
+
+export async function saveStateToSupabase(userId: string, state: AppState, previousState: AppState | null): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) return;
+
+  const updatedAt = new Date().toISOString();
+  const plan = buildIncrementalSyncPlan(previousState, state);
+  const previousWorkspacesById = new Map((previousState?.workspaces || []).map((workspace) => [workspace.id, workspace]));
+
+  const workspaceRows: WorkspaceRow[] = plan.workspacesToUpsert.map((workspace, index) => {
+    const previousWorkspace = previousWorkspacesById.get(workspace.id);
+    const workspaceIndex = state.workspaces.findIndex((entry) => entry.id === workspace.id);
+    return {
+      user_id: userId,
+      id: workspace.id,
+      name: workspace.name,
+      active_project_id: previousWorkspace?.activeProjectId ?? state.workspaces[workspaceIndex]?.activeProjectId ?? workspace.activeProjectId,
+      visible_project_ids: previousWorkspace?.visibleProjectIds ?? state.workspaces[workspaceIndex]?.visibleProjectIds ?? workspace.visibleProjectIds,
+      sort_order: workspaceIndex >= 0 ? workspaceIndex : index,
+      updated_at: updatedAt
+    };
+  });
+
+  const projectRows: ProjectRow[] = plan.projectsToUpsert.map((project) => ({
+    user_id: userId,
+    id: project.id,
+    workspace_id: project.workspaceId,
+    name: project.name,
+    sort_order: state.projects.findIndex((entry) => entry.id === project.id),
+    updated_at: updatedAt
+  }));
+
+  const outcomeRows: OutcomeRow[] = plan.outcomesToUpsert.map((outcome) => ({
+    user_id: userId,
+    id: outcome.id,
+    workspace_id: outcome.workspaceId,
+    project_id: outcome.projectId,
+    title: outcome.title,
+    type: outcome.type,
+    notes: outcome.notes,
+    agent_eligible: outcome.agentEligible,
+    done: outcome.done,
+    sort_order: state.outcomes.findIndex((entry) => entry.id === outcome.id),
+    updated_at: updatedAt
+  }));
+
+  const burstRows: BurstRow[] = plan.burstsToUpsert.map((burst) => ({
+    user_id: userId,
+    id: burst.id,
+    workspace_id: burst.workspaceId,
+    project_id: burst.projectId,
+    outcome_id: burst.outcomeId,
+    title: burst.title,
+    session_label: burst.sessionLabel,
+    type: burst.type,
+    notes: burst.notes,
+    agent_eligible: burst.agentEligible,
+    duration_seconds: burst.durationSeconds,
+    logged_at: burst.loggedAt,
+    updated_at: updatedAt
+  }));
+
+  const preferencesRow = buildPreferencesRow(userId, state, updatedAt, previousState);
+
+  if (workspaceRows.length) {
+    const { error } = await client.from("workspaces").upsert(workspaceRows, { onConflict: "user_id,id" });
+    if (error) throw error;
+  }
+
+  if (projectRows.length) {
+    const { error } = await client.from("projects").upsert(projectRows, { onConflict: "user_id,id" });
+    if (error) throw error;
+  }
+
+  if (outcomeRows.length) {
+    const { error } = await client.from("outcomes").upsert(outcomeRows, { onConflict: "user_id,id" });
+    if (error) throw error;
+  }
+
+  if (burstRows.length) {
+    const { error } = await client.from("bursts").upsert(burstRows, { onConflict: "user_id,id" });
+    if (error) throw error;
+  }
+
+  if (plan.shouldUpsertPreferences) {
+    const { error: preferencesError } = await client.from("app_preferences").upsert(preferencesRow, { onConflict: "user_id" });
+    if (preferencesError) throw preferencesError;
+  }
+
+  await deleteRowsByIds("bursts", userId, plan.burstIdsToDelete);
+  await deleteRowsByIds("outcomes", userId, plan.outcomeIdsToDelete);
+  await deleteRowsByIds("projects", userId, plan.projectIdsToDelete);
+  await deleteRowsByIds("workspaces", userId, plan.workspaceIdsToDelete);
 }

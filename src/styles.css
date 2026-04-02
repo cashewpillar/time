@@ -538,6 +538,59 @@ button {
   justify-content: flex-end;
 }
 
+.sync-action-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.sync-action-tooltip-wrap::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  width: min(260px, 72vw);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-strong);
+  box-shadow: var(--shadow);
+  color: var(--white);
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1.4;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+  z-index: 2;
+}
+
+.sync-action-tooltip-wrap:hover::after,
+.sync-action-tooltip-wrap:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.sync-action-tooltip-wrap:focus-visible {
+  outline: 2px solid var(--outline-strong);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+.sync-emergency-btn {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 211, 211, 0.14);
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.sync-emergency-btn:hover {
+  background: rgba(255, 211, 211, 0.2);
+}
+
 .completion-alert-modal {
   position: fixed;
   inset: 0;

@@ -10,7 +10,8 @@ import {
   serializeStateForStorage,
   STORAGE_KEY
 } from "../state/app-state";
-import { isSupabaseSyncEnabled, loadStateFromSupabase, saveStateToSupabase } from "../lib/supabase-sync";
+import { buildSyncFingerprint } from "../lib/sync-fingerprint";
+import { isSupabaseSyncEnabled, loadStateFromSupabase, saveFullStateToSupabase, saveStateToSupabase } from "../lib/supabase-sync";
 
 export type SyncStatus = "disabled" | "auth_required" | "connecting" | "connected" | "syncing" | "error";
 
@@ -28,26 +29,13 @@ type PersistentAppStateResult = {
   dispatch: Dispatch<AppAction>;
   syncInfo: SyncInfo;
   syncNow: () => Promise<void>;
+  forceFullSync: () => Promise<void>;
   pullFromRemote: () => Promise<void>;
 };
 
 type Options = {
   userId: string | null;
 };
-
-function buildSyncFingerprint(state: AppState): string {
-  return JSON.stringify({
-    activeWorkspaceId: state.activeWorkspaceId,
-    targetSeconds: state.targetSeconds,
-    completedSessions: state.completedSessions,
-    activeOutcomeId: state.activeOutcomeId,
-    customOutcomeTypes: state.customOutcomeTypes,
-    workspaces: state.workspaces,
-    projects: state.projects,
-    outcomes: state.outcomes,
-    bursts: state.bursts
-  });
-}
 
 const DEFAULT_FINGERPRINT = buildSyncFingerprint(defaultState());
 
@@ -79,6 +67,7 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
   }));
   const lastUploadedFingerprintRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
+  const lastSyncedStateRef = useRef<AppState | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state)));
@@ -116,15 +105,17 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         if (cancelled) return;
 
         if (remoteState && buildSyncFingerprint(state) === DEFAULT_FINGERPRINT) {
-          dispatch({
-            type: "hydrate-state",
-            state: remoteState,
-            status: "Loaded your synced data."
-          });
-          lastUploadedFingerprintRef.current = buildSyncFingerprint(loadStateFromStorageValue(serializeStateForStorage({
+          const hydratedState = loadStateFromStorageValue(serializeStateForStorage({
             ...defaultState(),
             ...remoteState
-          })));
+          }));
+          dispatch({
+            type: "hydrate-state",
+            state: hydratedState,
+            status: "Loaded your synced data."
+          });
+          lastUploadedFingerprintRef.current = buildSyncFingerprint(hydratedState);
+          lastSyncedStateRef.current = hydratedState;
         }
 
         setSyncInfo((current) => ({
@@ -194,9 +185,10 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         pendingUploadSeconds: null
       }));
 
-      void saveStateToSupabase(userId, state)
+      void saveStateToSupabase(userId, state, lastSyncedStateRef.current)
         .then(() => {
           lastUploadedFingerprintRef.current = autoSyncFingerprint;
+          lastSyncedStateRef.current = state;
           setSyncInfo((current) => ({
             ...current,
             enabled: true,
@@ -239,8 +231,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
     }));
 
     try {
-      await saveStateToSupabase(userId, state);
+      await saveStateToSupabase(userId, state, lastSyncedStateRef.current);
       lastUploadedFingerprintRef.current = autoSyncFingerprint;
+      lastSyncedStateRef.current = state;
       setSyncInfo((current) => ({
         ...current,
         enabled: true,
@@ -257,6 +250,44 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         enabled: true,
         status: "error",
         lastError: error instanceof Error ? error.message : "Unknown Supabase sync error.",
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
+      }));
+    }
+  }
+
+  async function forceFullSync(): Promise<void> {
+    if (!isSupabaseSyncEnabled() || !userId) return;
+
+    setSyncInfo((current) => ({
+      ...current,
+      enabled: true,
+      status: "syncing",
+      lastError: null,
+      pendingUploadAt: null,
+      pendingUploadSeconds: null
+    }));
+
+    try {
+      await saveFullStateToSupabase(userId, state);
+      lastUploadedFingerprintRef.current = autoSyncFingerprint;
+      lastSyncedStateRef.current = state;
+      setSyncInfo((current) => ({
+        ...current,
+        enabled: true,
+        status: "connected",
+        lastSyncedAt: Date.now(),
+        lastError: null,
+        pendingUploadAt: null,
+        pendingUploadSeconds: null
+      }));
+    } catch (error) {
+      console.error("Unable to force full sync to Supabase.", error);
+      setSyncInfo((current) => ({
+        ...current,
+        enabled: true,
+        status: "error",
+        lastError: error instanceof Error ? error.message : "Unknown Supabase force sync error.",
         pendingUploadAt: null,
         pendingUploadSeconds: null
       }));
@@ -303,6 +334,7 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         bursts: remoteState.bursts ?? []
       } as AppState;
       lastUploadedFingerprintRef.current = buildSyncFingerprint(nextState);
+      lastSyncedStateRef.current = nextState;
       setSyncInfo((current) => ({
         ...current,
         enabled: true,
@@ -330,6 +362,7 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
     dispatch,
     syncInfo,
     syncNow,
+    forceFullSync,
     pullFromRemote
   };
 }
