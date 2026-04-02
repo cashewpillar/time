@@ -393,6 +393,7 @@ function App() {
             elapsedSeconds={state.elapsedSeconds}
             targetSeconds={state.targetSeconds}
             isRunning={state.isRunning}
+            bursts={state.bursts}
             selectedOutcomeName={selectedOutcome?.title || null}
             selectedOutcomeContext={selectedOutcomeContext}
             timerStatusMessage={timerStatusMessage}
