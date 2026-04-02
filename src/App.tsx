@@ -1,20 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { playTimerStart, startTimerCompleteAlarm, stopTimerCompleteAlarm } from "./lib/audio";
 import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
-import { fetchNotionSelectOptions, RECENT_IMPORT_DAYS, type NotionSelectOptions } from "./lib/notion";
 import { parseTimerInput } from "./lib/time";
 import { ProjectTabs } from "./components/ProjectTabs";
+import { SessionLabelField } from "./components/SessionLabelField";
 import { TaskList } from "./components/TaskList";
 import { TimerCard } from "./components/TimerCard";
 import { WorkspaceMenu } from "./components/WorkspaceMenu";
 import { usePersistentAppState } from "./hooks/usePersistentAppState";
-import type { RecentTaskSlot, Task } from "./types/app";
+import { useSupabaseAuth } from "./hooks/useSupabaseAuth";
 import {
   getActiveProject,
-  getSelectedTask,
+  getSelectedOutcome,
   getActiveWorkspace,
-  getEditingTask,
-  getTaskTypeOptions,
+  buildBurstHistoryLabel,
+  getEditingOutcome,
+  getOutcomesForProjectId,
+  getOutcomeTypeOptions,
   getVisibleProjects
 } from "./state/app-state";
 
@@ -23,24 +25,22 @@ const THEME_STORAGE_KEY = "time-theme";
 type ThemeName = "blue" | "green" | "sakura";
 
 function App() {
-  const { state, dispatch, notionConfig, updateNotionConfig, syncStatus, logTaskEntry } = usePersistentAppState();
+  const { configured, isLoading: isAuthLoading, isSigningIn, user, error: authError, info: authInfo, signInWithPassword, signOut } = useSupabaseAuth();
+  const { state, dispatch, syncInfo, syncNow, pullFromRemote } = usePersistentAppState({ userId: user?.id || null });
   const workspaceMenuRef = useRef<HTMLDivElement | null>(null);
   const projectMenuRef = useRef<HTMLDivElement | null>(null);
   const timerCardRef = useRef<HTMLElement | null>(null);
   const previousCompletedSessionsRef = useRef(state.completedSessions);
-  const [isNotionConfigOpen, setIsNotionConfigOpen] = useState(false);
-  const [databaseIdDraft, setDatabaseIdDraft] = useState(notionConfig.databaseId);
-  const [ownerTokenDraft, setOwnerTokenDraft] = useState(notionConfig.ownerToken);
-  const [isLoadingNotionOptions, setIsLoadingNotionOptions] = useState(false);
-  const [notionOptionsError, setNotionOptionsError] = useState("");
-  const [notionOptions, setNotionOptions] = useState<NotionSelectOptions>({
-    taskTypes: [],
-    workspaces: []
-  });
   const [isTaskQueueExpanded, setIsTaskQueueExpanded] = useState(false);
+  const [isSelectedBurstHistoryOpen, setIsSelectedBurstHistoryOpen] = useState(false);
   const [collapsedTasksHeight, setCollapsedTasksHeight] = useState<number | null>(null);
   const [isDesktopLayout, setIsDesktopLayout] = useState(false);
   const [isCompletionAlertVisible, setIsCompletionAlertVisible] = useState(false);
+  const [completionBurstId, setCompletionBurstId] = useState<string | null>(null);
+  const [completionSessionLabel, setCompletionSessionLabel] = useState("");
+  const [isSyncInfoVisible, setIsSyncInfoVisible] = useState(false);
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
   const [theme, setTheme] = useState<ThemeName>(() => {
     if (typeof window === "undefined") return "blue";
 
@@ -50,47 +50,37 @@ function App() {
 
   const activeWorkspace = useMemo(() => getActiveWorkspace(state), [state]);
   const activeProject = useMemo(() => getActiveProject(state), [state]);
-  const selectedTask = useMemo(() => getSelectedTask(state), [state]);
-  const editingTask = useMemo(() => getEditingTask(state), [state]);
-  const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace), [activeWorkspace]);
-  const taskTypeOptions = useMemo(() => getTaskTypeOptions(state.customTaskTypes), [state.customTaskTypes]);
-  const notionConfigured = Boolean(notionConfig.databaseId.trim() && notionConfig.ownerToken.trim());
-  const isTaskComposerOpen = state.isTaskFormOpen && !editingTask;
-  const shouldExpandTasksCard = isTaskQueueExpanded || state.isTaskFormOpen;
-  const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedTask);
-  const selectedTaskContext = selectedTask && activeWorkspace && activeProject
+  const selectedOutcome = useMemo(() => getSelectedOutcome(state), [state]);
+  const editingOutcome = useMemo(() => getEditingOutcome(state), [state]);
+  const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace, state), [activeWorkspace, state]);
+  const projectOutcomes = useMemo(() => activeProject ? getOutcomesForProjectId(state, activeProject.id) : [], [activeProject, state]);
+  const outcomeTypeOptions = useMemo(() => getOutcomeTypeOptions(state.customOutcomeTypes), [state.customOutcomeTypes]);
+  const isOutcomeComposerOpen = state.isOutcomeFormOpen && !editingOutcome;
+  const shouldExpandTasksCard = isTaskQueueExpanded || isSelectedBurstHistoryOpen || state.isOutcomeFormOpen || state.isProjectMenuOpen;
+  const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedOutcome);
+  const selectedOutcomeContext = selectedOutcome && activeWorkspace && activeProject
     ? `${activeWorkspace.name} / ${activeProject.name}`
     : null;
-  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current task|Session complete|Timer (started|paused|reset)|Timer target set|Time spent set)/.test(state.status)
+  const timerStatusMessage = /^(Logged|Use mm:ss|Pick a current outcome|Session complete|Timer (started|paused|reset)|Timer target set|Time spent set)/.test(state.status)
     ? state.status
     : null;
 
   useLayoutEffect(() => {
-    setIsTaskQueueExpanded(!(activeProject?.tasks.length));
-  }, [activeProject?.id, activeProject?.tasks.length]);
+    setIsTaskQueueExpanded(!projectOutcomes.length);
+  }, [activeProject?.id, projectOutcomes.length]);
 
   useEffect(() => {
-    setDatabaseIdDraft(notionConfig.databaseId);
-    setOwnerTokenDraft(notionConfig.ownerToken);
-  }, [notionConfig.databaseId, notionConfig.ownerToken]);
-
-  useEffect(() => {
-    if (!isNotionConfigOpen && !isCompletionAlertVisible) return undefined;
+    if (!isCompletionAlertVisible) return undefined;
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        if (isCompletionAlertVisible) {
-          handleDismissCompletionAlert();
-          return;
-        }
-
-        setIsNotionConfigOpen(false);
+        handleDismissCompletionAlert();
       }
     }
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isCompletionAlertVisible, isNotionConfigOpen]);
+  }, [isCompletionAlertVisible]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -109,10 +99,10 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const taskName = selectedTask?.text?.trim() || "No task selected";
+    const taskName = selectedOutcome?.title?.trim() || "No outcome selected";
     const projectName = activeProject?.name || "Project";
     document.title = `${taskName} - ${projectName}`;
-  }, [activeProject?.name, selectedTask?.text]);
+  }, [activeProject?.name, selectedOutcome?.title]);
 
   useEffect(() => {
     if (!state.isRunning) return undefined;
@@ -126,38 +116,20 @@ function App() {
 
   useEffect(() => {
     if (state.completedSessions > previousCompletedSessionsRef.current) {
+      const latestBurst = state.bursts
+        .filter((burst) => burst.outcomeId === state.activeOutcomeId)
+        .sort((left, right) => right.loggedAt - left.loggedAt)[0] || null;
       startTimerCompleteAlarm();
       setIsCompletionAlertVisible(true);
+      setCompletionBurstId(latestBurst?.id || null);
+      setCompletionSessionLabel(latestBurst?.sessionLabel || "");
       showTimerCompleteNotification(
-        selectedTask?.text?.trim() || "Focus session",
+        selectedOutcome?.title?.trim() || "Focus session",
         activeProject?.name || "Project"
       );
-
-      if (selectedTask && notionConfig.databaseId.trim() && notionConfig.ownerToken.trim()) {
-        const completedAt = Date.now();
-        void logTaskEntry({
-          entry: selectedTask.text.trim(),
-          taskType: selectedTask.type.trim(),
-          task: activeProject?.name || "Project",
-          epic: activeWorkspace?.name || "Workspace",
-          minutes: Math.max(1, Math.round(state.targetSeconds / 60)),
-          startDatetime: new Date(completedAt).toISOString(),
-          notes: selectedTask.notes.trim(),
-          aiWorkflow: selectedTask.agentEligible
-        });
-      }
     }
     previousCompletedSessionsRef.current = state.completedSessions;
-  }, [
-    activeProject?.name,
-    activeWorkspace?.name,
-    logTaskEntry,
-    notionConfig.databaseId,
-    notionConfig.ownerToken,
-    selectedTask,
-    state.completedSessions,
-    state.targetSeconds
-  ]);
+  }, [activeProject?.name, selectedOutcome, state.completedSessions]);
 
   useEffect(() => () => {
     stopTimerCompleteAlarm();
@@ -200,7 +172,7 @@ function App() {
       observer.disconnect();
       window.removeEventListener("resize", updateHeight);
     };
-  }, [state.targetSeconds, selectedTask?.text, state.isRunning, state.elapsedSeconds]);
+  }, [state.targetSeconds, selectedOutcome?.title, state.isRunning, state.elapsedSeconds]);
 
   function promptForWorkspaceRename(workspaceId: string) {
     const workspace = state.workspaces.find((entry) => entry.id === workspaceId);
@@ -219,7 +191,7 @@ function App() {
   }
 
   function promptForProjectRename(projectId: string) {
-    const project = activeWorkspace?.projects.find((entry) => entry.id === projectId);
+    const project = state.projects.find((entry) => entry.id === projectId);
     if (!project) return;
 
     const nextName = window.prompt("Rename project", project.name);
@@ -260,84 +232,44 @@ function App() {
   function handleDismissCompletionAlert() {
     stopTimerCompleteAlarm();
     setIsCompletionAlertVisible(false);
+    setCompletionBurstId(null);
+    setCompletionSessionLabel("");
   }
 
-  function handleSaveTask(draft: { text: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
+  function handleSaveOutcome(draft: { title: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
     if (!activeProject) {
-      dispatch({ type: "set-status", status: "Add a task name first." });
+      dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
     }
 
-    if (!draft.text.trim()) {
-      dispatch({ type: "set-status", status: "Add a task name first." });
+    if (!draft.title.trim()) {
+      dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
     }
 
     if (draft.type === "__custom__" && !customType.trim()) {
-      dispatch({ type: "set-status", status: "Add a custom task type first." });
+      dispatch({ type: "set-status", status: "Add a custom outcome type first." });
       return;
     }
 
     const now = Date.now();
 
     dispatch({
-      type: "save-task",
+      type: "save-outcome",
       draft,
       customType,
       now
     });
   }
 
-  async function handleManualLog(durationSeconds: number, slotId: string | null): Promise<boolean> {
-    const selectedRecentSlot = slotId
-      ? state.recentTaskSlots.find((slot) => slot.id === slotId) || null
-      : null;
-
-    const activeSlot = selectedRecentSlot || (selectedTask && activeWorkspace && activeProject
-      ? {
-          id: `recent-task-slot-${Date.now()}`,
-          taskId: selectedTask.id,
-          taskText: selectedTask.text.trim(),
-          taskType: selectedTask.type.trim(),
-          taskNotes: selectedTask.notes,
-          agentEligible: selectedTask.agentEligible,
-          workspaceId: activeWorkspace.id,
-          workspaceName: activeWorkspace.name,
-          projectId: activeProject.id,
-          projectName: activeProject.name,
-          lastDurationSeconds: null,
-          loggedAt: Date.now()
-        }
-      : null);
-
-    if (!activeSlot) {
-      dispatch({ type: "set-status", status: "Pick a current task or a recent slot first." });
+  async function handleManualLog(durationSeconds: number, _slotId: string | null, sessionLabel: string): Promise<boolean> {
+    if (!selectedOutcome || !activeWorkspace || !activeProject) {
+      dispatch({ type: "set-status", status: "Pick a current outcome first." });
       return false;
     }
 
     const loggedAt = Date.now();
-    const nextSlot = {
-      ...activeSlot,
-      id: `recent-task-slot-${loggedAt}`,
-      lastDurationSeconds: durationSeconds,
-      loggedAt
-    };
-
-    dispatch({ type: "log-manual-entry", slot: nextSlot, durationSeconds });
-
-    if (notionConfig.databaseId.trim() && notionConfig.ownerToken.trim()) {
-      await logTaskEntry({
-        entry: nextSlot.taskText,
-        taskType: nextSlot.taskType,
-        task: nextSlot.projectName,
-        epic: nextSlot.workspaceName,
-        minutes: Math.max(1, Math.round(durationSeconds / 60)),
-        startDatetime: new Date(loggedAt).toISOString(),
-        notes: nextSlot.taskNotes.trim(),
-        aiWorkflow: nextSlot.agentEligible
-      });
-    }
-
+    dispatch({ type: "log-manual-entry", durationSeconds, sessionLabel, loggedAt });
     return true;
   }
 
@@ -347,82 +279,45 @@ function App() {
       .padStart(2, "0")}:${Math.floor((durationSeconds % 3600) / 60).toString().padStart(2, "0")}.` });
   }
 
-  function matchesRecentSlotTask(task: Task, slot: RecentTaskSlot): boolean {
-    return task.text.trim() === slot.taskText.trim()
-      && task.type.trim() === slot.taskType.trim()
-      && task.notes.trim() === slot.taskNotes.trim();
-  }
-
-  function handleSelectRecentSlot(slot: RecentTaskSlot) {
-    const targetWorkspace = state.workspaces.find((workspace) => workspace.id === slot.workspaceId) || null;
-    if (!targetWorkspace) return;
-
-    const targetProject = targetWorkspace.projects.find((project) => project.id === slot.projectId) || null;
-    if (!targetProject) return;
-
-    const matchedTask = targetProject.tasks.find((task) => task.id === slot.taskId)
-      || targetProject.tasks.find((task) => matchesRecentSlotTask(task, slot))
-      || targetProject.tasks.find((task) => task.text.trim() === slot.taskText.trim() && !task.notes.trim() && !slot.taskNotes.trim())
-      || null;
-
-    if (targetWorkspace.id !== state.activeWorkspaceId) {
-      dispatch({ type: "select-workspace", workspaceId: targetWorkspace.id });
-    }
-
-    if (targetProject.id !== targetWorkspace.activeProjectId || targetWorkspace.id !== state.activeWorkspaceId) {
-      dispatch({ type: "select-project", projectId: targetProject.id });
-    }
-
-    if (matchedTask) {
-      dispatch({ type: "select-task", taskId: matchedTask.id });
+  function handleSaveCompletionSessionLabel() {
+    if (!completionBurstId) {
+      handleDismissCompletionAlert();
       return;
     }
 
-    dispatch({ type: "restore-recent-task", slot, now: Date.now() });
-  }
-
-  function handleSaveNotionConfig() {
-    updateNotionConfig({
-      databaseId: databaseIdDraft,
-      ownerToken: ownerTokenDraft
+    dispatch({
+      type: "set-burst-session-label",
+      burstId: completionBurstId,
+      sessionLabel: completionSessionLabel
     });
+    handleDismissCompletionAlert();
   }
 
-  async function handleFetchNotionOptions() {
-    const trimmedDatabaseId = databaseIdDraft.trim();
-    const trimmedOwnerToken = ownerTokenDraft.trim();
-    if (!trimmedDatabaseId) {
-      setNotionOptionsError("Add a database ID first.");
-      setNotionOptions({ taskTypes: [], workspaces: [] });
-      return;
-    }
+  const syncStatusLabel = syncInfo.status === "disabled"
+    ? "Local only"
+    : syncInfo.status === "auth_required"
+      ? "Sign in for Sync"
+    : syncInfo.status === "connecting"
+      ? "Connecting"
+    : syncInfo.status === "syncing"
+      ? "Syncing"
+      : syncInfo.status === "error"
+        ? "Sync error"
+          : "Connected";
+  const syncStatusDetail = syncInfo.status === "connected" && syncInfo.pendingUploadSeconds
+    ? `upload in ${syncInfo.pendingUploadSeconds}s`
+    : syncInfo.status === "connected" && syncInfo.lastSyncedAt
+        ? "synced"
+        : null;
+  const syncTriggerLabel = syncStatusDetail ? `${syncStatusLabel} · ${syncStatusDetail}` : syncStatusLabel;
 
-    if (!trimmedOwnerToken) {
-      setNotionOptionsError("Add your owner token first.");
-      setNotionOptions({ taskTypes: [], workspaces: [] });
-      return;
-    }
+  async function handlePasswordSignIn() {
+    const trimmed = authEmail.trim();
+    if (!trimmed || !authPassword.trim()) return;
+    const didSignIn = await signInWithPassword(trimmed, authPassword);
+    if (!didSignIn) return;
 
-    setIsLoadingNotionOptions(true);
-    setNotionOptionsError("");
-
-    try {
-      const options = await fetchNotionSelectOptions({
-        databaseId: trimmedDatabaseId,
-        ownerToken: trimmedOwnerToken
-      });
-      setNotionOptions(options);
-      dispatch({
-        type: "import-notion-options",
-        taskTypes: options.taskTypes,
-        workspaces: options.workspaces
-      });
-    } catch (error) {
-      setNotionOptions({ taskTypes: [], workspaces: [] });
-      setNotionOptionsError(error instanceof Error ? error.message : "Failed to load select options.");
-    } finally {
-      setIsLoadingNotionOptions(false);
-    }
+    setAuthPassword("");
   }
 
   return (
@@ -441,16 +336,13 @@ function App() {
             onCreate={() => dispatch({ type: "create-workspace", now: Date.now() })}
           />
         </div>
-
-        <div className="sync-bar">
-          <div className="sync-indicator">
-            <span className={`sync-dot${notionConfigured && syncStatus.phase !== "error" ? " connected" : ""}`}></span>
-            <span>{syncStatus.message}</span>
-          </div>
-          <button className="sync-toggle" type="button" onClick={() => setIsNotionConfigOpen(true)}>
-            Configure Notion
-          </button>
-        </div>
+        <button
+          className={`sync-status-trigger${syncInfo.status === "error" ? " error" : ""}`}
+          type="button"
+          onClick={() => setIsSyncInfoVisible(true)}
+        >
+          {syncTriggerLabel}
+        </button>
       </header>
 
       <main className="main">
@@ -462,7 +354,7 @@ function App() {
           <div ref={projectMenuRef}>
             <ProjectTabs
               visibleProjects={visibleProjects}
-              projects={activeWorkspace?.projects || []}
+              projects={activeWorkspace ? state.projects.filter((project) => project.workspaceId === activeWorkspace.id) : []}
               activeProjectId={activeWorkspace?.activeProjectId || null}
               isMenuOpen={state.isProjectMenuOpen}
               onToggleMenu={() => dispatch({ type: "toggle-project-menu" })}
@@ -476,20 +368,23 @@ function App() {
           <TaskList
             key={activeProject?.id || "no-project"}
             project={activeProject}
-            editingTask={editingTask}
-            activeTaskId={state.activeTaskId}
-            taskTypeOptions={taskTypeOptions}
-            isComposerOpen={isTaskComposerOpen}
+            outcomes={projectOutcomes}
+            bursts={state.bursts}
+            editingOutcome={editingOutcome}
+            activeOutcomeId={state.activeOutcomeId}
+            outcomeTypeOptions={outcomeTypeOptions}
+            isComposerOpen={isOutcomeComposerOpen}
             onQueueExpandedChange={setIsTaskQueueExpanded}
-            onSelectTask={(taskId) => dispatch({ type: "select-task", taskId })}
-            onEditTask={(taskId) => dispatch({ type: "edit-task", taskId })}
-            onToggleTask={(taskId) => dispatch({ type: "toggle-task", taskId })}
-            onDeleteTask={(taskId) => dispatch({ type: "delete-task", taskId })}
+            onSelectedBurstHistoryOpenChange={setIsSelectedBurstHistoryOpen}
+            onSelectOutcome={(outcomeId) => dispatch({ type: "select-outcome", outcomeId })}
+            onEditOutcome={(outcomeId) => dispatch({ type: "edit-outcome", outcomeId })}
+            onToggleOutcome={(outcomeId) => dispatch({ type: "toggle-outcome", outcomeId })}
+            onDeleteOutcome={(outcomeId) => dispatch({ type: "delete-outcome", outcomeId })}
             onClearCompleted={() => dispatch({ type: "clear-completed" })}
-            onOpenComposer={() => dispatch({ type: "open-task-form" })}
-            onCancelEdit={() => dispatch({ type: "close-task-form" })}
-            onCancelComposer={() => dispatch({ type: "close-task-form" })}
-            onSaveTask={handleSaveTask}
+            onOpenComposer={() => dispatch({ type: "open-outcome-form" })}
+            onCancelEdit={() => dispatch({ type: "close-outcome-form" })}
+            onCancelComposer={() => dispatch({ type: "close-outcome-form" })}
+            onSaveOutcome={handleSaveOutcome}
           />
         </section>
 
@@ -498,17 +393,14 @@ function App() {
             elapsedSeconds={state.elapsedSeconds}
             targetSeconds={state.targetSeconds}
             isRunning={state.isRunning}
-            selectedTaskName={selectedTask?.text || null}
-            selectedTaskContext={selectedTaskContext}
-            recentTaskSlots={state.recentTaskSlots}
+            selectedOutcomeName={selectedOutcome?.title || null}
+            selectedOutcomeContext={selectedOutcomeContext}
             timerStatusMessage={timerStatusMessage}
             shouldHighlightStart={shouldHighlightTimerStart}
             onToggleTimer={handleToggleTimer}
             onReset={() => dispatch({ type: "reset-timer" })}
             onCommitTarget={handleCommitTarget}
             onPreviewManualDuration={handlePreviewManualDuration}
-            onSelectRecentSlot={handleSelectRecentSlot}
-            onClearRecentSlots={() => dispatch({ type: "clear-recent-task-slots" })}
             onManualLog={handleManualLog}
           />
         </section>
@@ -544,94 +436,6 @@ function App() {
         </div>
       </div>
 
-      {isNotionConfigOpen ? (
-        <div className="notion-modal" role="dialog" aria-modal="true" aria-labelledby="notionModalTitle">
-          <button
-            className="notion-modal-backdrop"
-            type="button"
-            aria-label="Close Notion settings"
-            onClick={() => setIsNotionConfigOpen(false)}
-          ></button>
-
-          <div className="notion-modal-card">
-            <div className="notion-modal-header">
-              <div>
-                <div className="notion-modal-title" id="notionModalTitle">Notion Settings</div>
-                <div className="notion-modal-subtitle">Connect your local timer data and import recent options.</div>
-              </div>
-
-              <button
-                className="notion-modal-close"
-                type="button"
-                aria-label="Close Notion settings"
-                onClick={() => setIsNotionConfigOpen(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="notion-panel">
-              <label className="notion-field">
-                <span>Database ID</span>
-                <input
-                  type="text"
-                  placeholder="32-char database ID"
-                  value={databaseIdDraft}
-                  onChange={(event) => setDatabaseIdDraft(event.target.value)}
-                />
-              </label>
-
-              <label className="notion-field">
-                <span>Owner token</span>
-                <input
-                  type="password"
-                  placeholder="Paste your private sync token"
-                  value={ownerTokenDraft}
-                  onChange={(event) => setOwnerTokenDraft(event.target.value)}
-                />
-              </label>
-
-              <button className="notion-save" type="button" onClick={handleSaveNotionConfig}>
-                Save Notion settings locally
-              </button>
-
-              <button className="notion-save notion-secondary" type="button" onClick={handleFetchNotionOptions} disabled={isLoadingNotionOptions}>
-                {isLoadingNotionOptions ? "Importing..." : `Import recent entries (${RECENT_IMPORT_DAYS}d)`}
-              </button>
-
-              {notionOptionsError ? <div className="notion-helper error">{notionOptionsError}</div> : null}
-
-              {notionOptions.taskTypes.length || notionOptions.workspaces.length ? (
-                <div className="notion-options">
-                  <div className="notion-options-group">
-                    <div className="notion-options-label">Task type</div>
-                    <div className="notion-chip-list">
-                      {notionOptions.taskTypes.length ? notionOptions.taskTypes.map((value) => (
-                        <span key={value} className="notion-chip">{value}</span>
-                      )) : <span className="notion-helper">No task type values found.</span>}
-                    </div>
-                  </div>
-
-                  {notionOptions.workspaces.map((workspace) => (
-                    <div key={workspace.name} className="notion-options-group">
-                      <div className="notion-options-label">{workspace.name}</div>
-                      <div className="notion-chip-list">
-                        {workspace.projects.length ? workspace.projects.map((project) => (
-                          <span key={`${workspace.name}-${project.name}`} className="notion-chip">
-                            {project.name}
-                            {project.tasks.length ? ` (${project.tasks.length})` : ""}
-                          </span>
-                        )) : <span className="notion-helper">No projects found for this workspace.</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       {isCompletionAlertVisible ? (
         <div
           className="completion-alert-modal"
@@ -651,12 +455,144 @@ function App() {
             <div className="completion-alert-copy">
               <div className="completion-alert-title" id="completionAlertTitle">Timer complete</div>
               <div className="completion-alert-body" id="completionAlertBody">
-                {selectedTask?.text?.trim() || "Focus session"} is done.
+                {selectedOutcome?.title?.trim() || "Focus session"} is done.
               </div>
             </div>
-            <button className="completion-alert-dismiss" type="button" onClick={handleDismissCompletionAlert}>
-              Dismiss
-            </button>
+            <SessionLabelField
+              value={completionSessionLabel}
+              onChange={setCompletionSessionLabel}
+              inputId="completionSessionLabelInput"
+              className="completion-session-label"
+            />
+            <div className="completion-alert-preview">
+              {buildBurstHistoryLabel({
+                title: selectedOutcome?.title?.trim() || "Focus session",
+                sessionLabel: completionSessionLabel
+              })}
+            </div>
+            <div className="completion-alert-actions">
+              <button className="completion-alert-dismiss" type="button" onClick={handleSaveCompletionSessionLabel}>
+                Save label
+              </button>
+              <button className="completion-alert-skip" type="button" onClick={handleDismissCompletionAlert}>
+                Skip
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isSyncInfoVisible ? (
+        <div
+          className="sync-info-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="syncInfoTitle"
+        >
+          <button
+            className="sync-info-backdrop"
+            type="button"
+            aria-label="Dismiss sync info"
+            onClick={() => setIsSyncInfoVisible(false)}
+          ></button>
+
+          <div className="sync-info-card">
+            <div className="sync-info-title-row">
+              <div className="sync-info-title" id="syncInfoTitle">Supabase Sync</div>
+              <button
+                className="sync-info-tooltip"
+                type="button"
+                aria-label="Sync details"
+                data-tooltip="Auto-upload runs 10 seconds after durable changes. Downloads only happen when you trigger them here."
+              ></button>
+            </div>
+            {configured ? (
+              <div className="sync-auth-panel">
+                <div className="sync-info-row">
+                  <span className="sync-info-label">Account</span>
+                  <span className="sync-info-value">
+                    {isAuthLoading ? "Checking session..." : (user?.email || "Not signed in")}
+                  </span>
+                </div>
+                {!user ? (
+                  <div className="sync-auth-form">
+                    <input
+                      className="sync-auth-input"
+                      type="email"
+                      placeholder="Email"
+                      aria-label="Email for Supabase sign in"
+                      value={authEmail}
+                      onChange={(event) => setAuthEmail(event.target.value)}
+                    />
+                    <input
+                      className="sync-auth-input"
+                      type="password"
+                      placeholder="Password"
+                      aria-label="Password for Supabase sign in"
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                    />
+                    <button
+                      className="completion-alert-dismiss"
+                      type="button"
+                      onClick={() => void handlePasswordSignIn()}
+                      disabled={isAuthLoading || isSigningIn || !authEmail.trim() || !authPassword.trim()}
+                    >
+                      {isSigningIn ? "Signing in..." : "Sign in with Password"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="sync-auth-actions">
+                    <button className="completion-alert-skip" type="button" onClick={() => void signOut()}>
+                      Sign out
+                    </button>
+                  </div>
+                )}
+                {!user ? (
+                  <div className="sync-auth-message">
+                    Only one approved account is authorized to use sync.
+                  </div>
+                ) : null}
+                {(authError || authInfo) ? (
+                  <div className={`sync-auth-message${authError ? " error" : ""}`}>
+                    {authError || authInfo}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <div className="sync-info-grid">
+              <div className="sync-info-row">
+                <span className="sync-info-label">Status</span>
+                <span className={`sync-info-value${syncInfo.status === "error" ? " error" : ""}`}>{syncStatusLabel}</span>
+              </div>
+              <div className="sync-info-row">
+                <span className="sync-info-label">Last sync</span>
+                <span className="sync-info-value">
+                  {syncInfo.lastSyncedAt ? new Date(syncInfo.lastSyncedAt).toLocaleString() : "Not yet"}
+                </span>
+              </div>
+              <div className="sync-info-row sync-info-row-stack">
+                <span className="sync-info-label">Last error</span>
+                <span className={`sync-info-value sync-info-error-copy${syncInfo.lastError ? " error" : ""}`}>
+                  {syncInfo.lastError || "None"}
+                </span>
+              </div>
+            </div>
+            <div className="sync-info-actions">
+              {user ? (
+                <>
+                  <button className="completion-alert-skip" type="button" onClick={() => void pullFromRemote()}>
+                    Download from Supabase
+                  </button>
+                  <button className="completion-alert-skip" type="button" onClick={() => void syncNow()}>
+                    Upload to Supabase
+                  </button>
+                </>
+              ) : null}
+              <button className="completion-alert-dismiss" type="button" onClick={() => setIsSyncInfoVisible(false)}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

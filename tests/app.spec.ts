@@ -1,6 +1,58 @@
 import { expect, test } from "@playwright/test";
 import { AppPage } from "./app.page";
-import { appReducer, defaultState } from "../src/state/app-state";
+import { loadStateFromStorageValue, serializeStateForStorage } from "../src/state/app-state";
+
+test("migrates local state into normalized cache with derived outcomes", async () => {
+  const legacyState = {
+    activeWorkspaceId: "workspace-2",
+    activeTaskId: "task-landing-hero",
+    workspaces: [{
+      id: "workspace-2",
+      name: "Workspace 2",
+      activeProjectId: "workspace-2-project-2",
+      visibleProjectIds: ["workspace-2-project-1", "workspace-2-project-2"],
+      projects: [
+        { id: "workspace-2-project-1", name: "Project 1", tasks: [] },
+        {
+          id: "workspace-2-project-2",
+          name: "Project 2",
+          tasks: [
+            {
+              id: "task-landing-hero",
+              text: "Landing page - hero copy",
+              type: "design",
+              notes: "Tighten value prop",
+              agentEligible: false,
+              done: false
+            },
+            {
+              id: "task-landing-mobile",
+              text: "Landing page - mobile polish",
+              type: "design",
+              notes: "",
+              agentEligible: true,
+              done: true
+            }
+          ]
+        }
+      ]
+    }]
+  };
+
+  const state = loadStateFromStorageValue(legacyState);
+  const cache = serializeStateForStorage(state);
+  const outcomeIds = cache.outcomeIdsByProjectId["workspace-2-project-2"] || [];
+
+  expect(cache.version).toBe(4);
+  expect(outcomeIds).toHaveLength(1);
+  expect(cache.outcomesById[outcomeIds[0]]?.title).toBe("Landing page");
+  expect(Object.keys(cache.burstsById)).toHaveLength(0);
+
+  const hydrated = loadStateFromStorageValue(cache);
+  const hydratedProjectOutcomes = hydrated.outcomes.filter((outcome) => outcome.projectId === "workspace-2-project-2");
+  expect(hydratedProjectOutcomes).toHaveLength(1);
+  expect(hydrated.bursts).toHaveLength(0);
+});
 
 test.beforeEach(async ({ page }) => {
   const app = new AppPage(page);
@@ -35,10 +87,10 @@ test("always shows two project tabs and keeps the active visible tab in place", 
   await expect(projectTabs.nth(1)).toHaveClass(/active/);
 });
 
-test("task form supports built-in types, custom types, AI eligibility, and editing", async ({ page }) => {
+test("outcome form supports built-in types, custom types, AI eligibility, and editing", async ({ page }) => {
   const app = new AppPage(page);
 
-  await app.createTask({
+  await app.createOutcome({
     name: "Build onboarding flow",
     type: "development",
     notes: "Implement the happy path first.",
@@ -46,22 +98,23 @@ test("task form supports built-in types, custom types, AI eligibility, and editi
   });
 
   await expect(page.locator(".task-name")).toContainText("Build onboarding flow");
-  await expect(page.locator(".task-badge")).toContainText(["development", "AI Agent OK"]);
+  await expect(page.locator(".burst-summary-pill-type")).toContainText("development");
+  await expect(page.locator(".task-badge")).toContainText("AI Agent OK");
   await expect(page.locator(".task-notes-copy")).toContainText("Implement the happy path first.");
 
-  await app.editFirstTask({
+  await app.editFirstOutcome({
     type: "__custom__",
     customType: "research",
     notes: "Investigate implementation options.",
     aiEligible: false
   });
 
-  await expect(page.locator(".task-badge")).toContainText("research");
-  await expect(page.locator(".task-badges")).not.toContainText("AI Agent OK");
+  await expect(page.locator(".burst-summary-pill-type")).toContainText("research");
+  await expect(page.locator(".task-badge")).toHaveCount(0);
   await expect(page.locator(".task-notes-copy")).toContainText("Investigate implementation options.");
 
-  await app.openAddTaskForm();
-  await expect(app.taskTypeSelect).toContainText("Research");
+  await app.openAddOutcomeForm();
+  await expect(app.outcomeTypeSelect).toContainText("Research");
 });
 
 test("live timer and manual log expose duration presets", async ({ page }) => {
@@ -85,81 +138,53 @@ test("remembers the last visited timer mode after reload", async ({ page }) => {
   await expect(app.manualDurationPresets).toBeVisible();
 });
 
-test("manual log mode saves time against the selected task and caches it for reuse", async ({ page }) => {
+test("manual log mode saves time against the selected outcome and shows entry history", async ({ page }) => {
   const app = new AppPage(page);
 
-  await app.createTask({
+  await app.createOutcome({
     name: "Mobile planning",
     type: "product",
     notes: "Capture time manually from phone."
   });
-  await app.createTask({
+  await app.createOutcome({
     name: "Desk planning",
     type: "design"
   });
 
   await app.logManualTime("00:30");
 
-  await expect(app.statusMessage).toContainText("Logged 00:30 for Mobile planning.");
-  const recentSlot = page.getByRole("button", { name: /mobile planning workspace 2 \/ project 2 \/ 00:30/i });
-  await expect(recentSlot).toBeVisible();
-
-  await app.setManualPreset(10);
-  await recentSlot.click();
-  await expect(app.manualDurationPresets.getByRole("button", { name: "30m", exact: true })).toHaveClass(/active/);
-  await expect(page.locator(".timer-focus-name")).toContainText("Mobile planning");
-
-  await app.selectTask("Desk planning");
+  await expect(app.statusMessage).toContainText("Logged 00:30 for Desk planning.");
+  await expect(page.locator(".burst-summary-pill")).toContainText(["1 burst", "00:30 tracked"]);
+  await page.getByRole("button", { name: "Show entry log", exact: true }).click();
+  await expect(page.locator(".burst-history-meta")).toContainText("00:30");
   await expect(page.locator(".timer-focus-name")).toContainText("Desk planning");
 });
 
-test("clicking a recent slot syncs workspace, project, and selected task", async ({ page }) => {
+test("desktop task card expands for entry history and project dropdown overlays", async ({ page }) => {
   const app = new AppPage(page);
+  const tasksSection = page.locator(".tasks-section-top");
 
-  await app.selectWorkspace("Workspace 1");
-  await app.selectProject("Project 1");
-  await app.createTask({
-    name: "Slot sync task",
-    type: "design",
-    notes: "Sync me back"
+  await page.setViewportSize({ width: 1280, height: 900 });
+
+  await app.createOutcome({
+    name: "Mobile planning",
+    type: "product",
+    notes: "Capture time manually from phone."
   });
-  await app.logManualTime("00:15");
-
-  await app.selectWorkspace("Workspace 2");
-  await app.selectProject("Project 2");
-  await app.createTask({
-    name: "Other task",
-    type: "product"
+  await app.createOutcome({
+    name: "Desk planning",
+    type: "design"
   });
+  await app.logManualTime("00:30");
 
-  await app.timerModeLogTime.click();
-  await app.recentSlot(/slot sync task workspace 1 \/ project 1 \/ 00:15/i).click();
+  await expect(tasksSection).not.toHaveClass(/expanded/);
 
-  await expect(app.workspaceTrigger).toHaveText(/workspace 1/i);
-  await expect(app.projectTabs.nth(0)).toHaveClass(/active/);
-  await expect(app.projectTabs.nth(0)).toHaveText(/project 1/i);
-  await expect(page.locator(".selected-task-panel .task-name")).toContainText("Slot sync task");
-  await expect(page.locator(".selected-task-panel .task-notes-copy")).toContainText("Sync me back");
-});
+  await page.getByRole("button", { name: "Show entry log", exact: true }).click();
+  await expect(tasksSection).toHaveClass(/expanded/);
 
-test("notion import dedupes duplicate task titles", async () => {
-  const nextState = appReducer(defaultState(), {
-    type: "import-notion-options",
-    taskTypes: [],
-    workspaces: [{
-      name: "Imported Workspace",
-      projects: [{
-        name: "Imported Project",
-        tasks: [
-          { entry: "Same task", taskType: "development", notes: "", aiWorkflow: false },
-          { entry: "Same task", taskType: "design", notes: "   ", aiWorkflow: true },
-          { entry: "Same task", taskType: "development", notes: "Has notes", aiWorkflow: false }
-        ]
-      }]
-    }]
-  });
+  await page.getByRole("button", { name: "Hide entry log", exact: true }).click();
+  await expect(tasksSection).not.toHaveClass(/expanded/);
 
-  const importedTasks = nextState.workspaces[0]?.projects[0]?.tasks ?? [];
-  expect(importedTasks).toHaveLength(1);
-  expect(importedTasks[0]?.text).toBe("Same task");
+  await app.openProjectMenu();
+  await expect(tasksSection).toHaveClass(/expanded/);
 });
