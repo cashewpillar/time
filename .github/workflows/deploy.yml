@@ -8,7 +8,6 @@ on:
 env:
   # Opt in early so JavaScript actions run on Node 24 before GitHub flips the default.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  VITE_NOTION_WORKER_URL: ${{ vars.VITE_NOTION_WORKER_URL }}
 
 permissions:
   contents: read
@@ -38,6 +37,10 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_ALLOWED_EMAIL: ${{ secrets.VITE_ALLOWED_EMAIL }}
         run: npm run build
 
       - name: Setup Pages
