@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from "react";
+import { useEffect, useState } from "react";
 import {
   formatManualDuration,
   formatTimerTime,
   parseManualDurationInput
 } from "../lib/time";
-import type { RecentTaskSlot } from "../types/app";
+import { HorizontalPillStrip } from "./HorizontalPillStrip";
+import { SessionLabelField } from "./SessionLabelField";
 
 const MOBILE_TIMER_NOTE_KEY = "time-mobile-timer-note-dismissed-v1";
 const TIMER_VIEW_MODE_KEY = "time-timer-view-mode-v1";
@@ -15,51 +15,36 @@ const CUSTOM_MANUAL_MINUTES_KEY = "time-custom-manual-minutes-v1";
 const CUSTOM_MANUAL_OPEN_KEY = "time-custom-manual-open-v1";
 const DURATION_PRESETS_MINUTES = [10, 15, 20, 25, 30, 45];
 type TimerViewMode = "timer" | "manual";
-type ScrollFadeState = {
-  showStart: boolean;
-  showEnd: boolean;
-};
 
 type TimerCardProps = {
   elapsedSeconds: number;
   targetSeconds: number;
   isRunning: boolean;
-  selectedTaskName: string | null;
-  selectedTaskContext: string | null;
-  recentTaskSlots: RecentTaskSlot[];
+  selectedOutcomeName: string | null;
+  selectedOutcomeContext: string | null;
   timerStatusMessage: string | null;
   shouldHighlightStart: boolean;
   onToggleTimer: () => void;
   onReset: () => void;
   onCommitTarget: (value: string) => boolean;
   onPreviewManualDuration: (durationSeconds: number) => void;
-  onSelectRecentSlot: (slot: RecentTaskSlot) => void;
-  onClearRecentSlots: () => void;
-  onManualLog: (durationSeconds: number, slotId: string | null) => Promise<boolean>;
+  onManualLog: (durationSeconds: number, slotId: string | null, sessionLabel: string) => Promise<boolean>;
 };
 
 export function TimerCard({
   elapsedSeconds,
   targetSeconds,
   isRunning,
-  selectedTaskName,
-  selectedTaskContext,
-  recentTaskSlots,
+  selectedOutcomeName,
+  selectedOutcomeContext,
   timerStatusMessage,
   shouldHighlightStart,
   onToggleTimer,
   onReset,
   onCommitTarget,
   onPreviewManualDuration,
-  onSelectRecentSlot,
-  onClearRecentSlots,
   onManualLog
 }: TimerCardProps) {
-  const dragStateRef = useRef<{ element: HTMLDivElement; startX: number; startScrollLeft: number; didDrag: boolean } | null>(null);
-  const suppressClickRef = useRef(false);
-  const timerPresetScrollRef = useRef<HTMLDivElement | null>(null);
-  const manualPresetScrollRef = useRef<HTMLDivElement | null>(null);
-  const recentSlotScrollRef = useRef<HTMLDivElement | null>(null);
   const [showMobileTimerNote, setShowMobileTimerNote] = useState(false);
   const [viewMode, setViewMode] = useState<TimerViewMode>(() => {
     if (typeof window === "undefined") return "timer";
@@ -87,16 +72,13 @@ export function TimerCard({
     if (typeof window === "undefined") return "30";
     return window.localStorage.getItem(CUSTOM_MANUAL_MINUTES_KEY) || "30";
   });
-  const [selectedManualSlotId, setSelectedManualSlotId] = useState<string | null>(null);
+  const [sessionLabel, setSessionLabel] = useState("");
   const [isSubmittingManualLog, setIsSubmittingManualLog] = useState(false);
   const [showCustomTimerInput, setShowCustomTimerInput] = useState(() => !DURATION_PRESETS_MINUTES.includes(Math.round(targetSeconds / 60)));
   const [showCustomManualInput, setShowCustomManualInput] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(CUSTOM_MANUAL_OPEN_KEY) === "true";
   });
-  const [timerPresetFade, setTimerPresetFade] = useState<ScrollFadeState>({ showStart: false, showEnd: true });
-  const [manualPresetFade, setManualPresetFade] = useState<ScrollFadeState>({ showStart: false, showEnd: true });
-  const [recentSlotFade, setRecentSlotFade] = useState<ScrollFadeState>({ showStart: false, showEnd: true });
 
   useEffect(() => {
     setShowCustomTimerInput(!DURATION_PRESETS_MINUTES.includes(Math.round(targetSeconds / 60)));
@@ -139,10 +121,9 @@ export function TimerCard({
   }, [showCustomManualInput]);
 
   const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 ? "Start" : "Resume");
-  const startDisabled = !selectedTaskName && !isRunning;
-  const startTooltip = "Select a task before starting the timer.";
-  const selectedRecentSlot = recentTaskSlots.find((slot) => slot.id === selectedManualSlotId) || null;
-  const hasManualTarget = Boolean(selectedTaskName || selectedRecentSlot);
+  const startDisabled = !selectedOutcomeName && !isRunning;
+  const startTooltip = "Select an outcome before starting the timer.";
+  const hasManualTarget = Boolean(selectedOutcomeName);
   const activeTimerPresetMinutes = targetSeconds % 60 === 0 ? targetSeconds / 60 : null;
   const customManualDurationSeconds = (() => {
     const hours = Number(customManualHoursDraft || "0");
@@ -156,36 +137,6 @@ export function TimerCard({
     if (!parsed || parsed % 60 !== 0) return null;
     return parsed / 60;
   })();
-
-  useEffect(() => {
-    if (!selectedRecentSlot) return;
-
-    const selectedRecentSlotContext = `${selectedRecentSlot.workspaceName} / ${selectedRecentSlot.projectName}`;
-    if (!selectedTaskName || selectedTaskName !== selectedRecentSlot.taskText || selectedTaskContext !== selectedRecentSlotContext) {
-      setSelectedManualSlotId(null);
-    }
-  }, [selectedRecentSlot, selectedTaskContext, selectedTaskName]);
-
-  useEffect(() => {
-    if (typeof selectedRecentSlot?.lastDurationSeconds !== "number") return;
-    setManualDurationDraft(formatManualDuration(selectedRecentSlot.lastDurationSeconds));
-    const totalMinutes = Math.round(selectedRecentSlot.lastDurationSeconds / 60);
-    setCustomManualHoursDraft(String(Math.floor(totalMinutes / 60)));
-    setCustomManualMinutesDraft(String(totalMinutes % 60));
-    setShowCustomManualInput(!DURATION_PRESETS_MINUTES.includes(totalMinutes));
-  }, [selectedRecentSlot?.id, selectedRecentSlot?.lastDurationSeconds]);
-
-  function applyRecentSlot(slot: RecentTaskSlot) {
-    setSelectedManualSlotId(slot.id);
-    onSelectRecentSlot(slot);
-    if (typeof slot.lastDurationSeconds === "number") {
-      setManualDurationDraft(formatManualDuration(slot.lastDurationSeconds));
-      const totalMinutes = Math.round(slot.lastDurationSeconds / 60);
-      setCustomManualHoursDraft(String(Math.floor(totalMinutes / 60)));
-      setCustomManualMinutesDraft(String(totalMinutes % 60));
-      setShowCustomManualInput(!DURATION_PRESETS_MINUTES.includes(totalMinutes));
-    }
-  }
 
   function commitTarget(value: string) {
     if (!onCommitTarget(value)) {
@@ -250,112 +201,18 @@ export function TimerCard({
     setCustomManualMinutesDraft(String(Math.min(59, Math.floor(parsed))));
   }
 
-  useEffect(() => {
-    function handleWindowMouseMove(event: MouseEvent) {
-      const dragState = dragStateRef.current;
-      if (!dragState) return;
-
-      const deltaX = event.clientX - dragState.startX;
-      if (Math.abs(deltaX) > 10) {
-        dragState.didDrag = true;
-        suppressClickRef.current = true;
-        dragState.element.dataset.dragging = "true";
-      }
-
-      dragState.element.scrollLeft = dragState.startScrollLeft - deltaX;
-      if (dragState.didDrag) {
-        event.preventDefault();
-      }
-    }
-
-    function handleWindowMouseUp() {
-      if (!dragStateRef.current) return;
-      delete dragStateRef.current.element.dataset.dragging;
-      dragStateRef.current = null;
-    }
-
-    window.addEventListener("mousemove", handleWindowMouseMove);
-    window.addEventListener("mouseup", handleWindowMouseUp);
-    return () => {
-      window.removeEventListener("mousemove", handleWindowMouseMove);
-      window.removeEventListener("mouseup", handleWindowMouseUp);
-    };
-  }, []);
-
-  function handleHorizontalDragStart(event: ReactMouseEvent<HTMLDivElement>) {
-    if (event.button !== 0) return;
-
-    suppressClickRef.current = false;
-    dragStateRef.current = {
-      element: event.currentTarget,
-      startX: event.clientX,
-      startScrollLeft: event.currentTarget.scrollLeft,
-      didDrag: false
-    };
-  }
-
-  function handleHorizontalDragClickCapture(event: ReactMouseEvent<HTMLDivElement>) {
-    if (!suppressClickRef.current) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-    suppressClickRef.current = false;
-  }
-
-  function handleHorizontalWheel(event: ReactWheelEvent<HTMLDivElement>) {
-    const element = event.currentTarget;
-    const canScrollHorizontally = element.scrollWidth > element.clientWidth;
-    if (!canScrollHorizontally) return;
-
-    const horizontalDelta = event.deltaX;
-    const verticalDelta = event.deltaY;
-    const intendedDelta = Math.abs(horizontalDelta) > 0 ? horizontalDelta : verticalDelta;
-    if (intendedDelta === 0) return;
-
-    element.scrollBy({
-      left: intendedDelta,
-      behavior: "smooth"
-    });
-    event.preventDefault();
-  }
-
-  function computeFadeState(element: HTMLDivElement | null): ScrollFadeState {
-    if (!element) {
-      return { showStart: false, showEnd: false };
-    }
-
-    const maxScrollLeft = element.scrollWidth - element.clientWidth;
-    if (maxScrollLeft <= 1) {
-      return { showStart: false, showEnd: false };
-    }
-
-    return {
-      showStart: element.scrollLeft > 1,
-      showEnd: element.scrollLeft < maxScrollLeft - 1
-    };
-  }
-
-  useEffect(() => {
-    const updateFadeStates = () => {
-      setTimerPresetFade(computeFadeState(timerPresetScrollRef.current));
-      setManualPresetFade(computeFadeState(manualPresetScrollRef.current));
-      setRecentSlotFade(computeFadeState(recentSlotScrollRef.current));
-    };
-
-    updateFadeStates();
-    window.addEventListener("resize", updateFadeStates);
-    return () => window.removeEventListener("resize", updateFadeStates);
-  }, [recentTaskSlots.length, showCustomManualInput, showCustomTimerInput, viewMode]);
-
   async function handleManualLogSubmit() {
     const parsed = showCustomManualInput ? customManualDurationSeconds : parseManualDurationInput(manualDurationDraft);
     if (!parsed || parsed <= 0 || isSubmittingManualLog) return;
 
     setIsSubmittingManualLog(true);
     try {
-      const didSave = await onManualLog(parsed, selectedManualSlotId);
+      const didSave = await onManualLog(parsed, null, sessionLabel);
       if (didSave && !showCustomManualInput) {
         setManualDurationDraft("00:30");
+      }
+      if (didSave) {
+        setSessionLabel("");
       }
     } finally {
       setIsSubmittingManualLog(false);
@@ -393,9 +250,9 @@ export function TimerCard({
       ) : null}
 
       <div className="timer-focus-banner">
-        <div className="timer-focus-label">{selectedTaskName ? "Now focusing" : "Not focusing"}</div>
-        <div className="timer-focus-name">{selectedTaskName || "Pick a task to start"}</div>
-        {selectedTaskContext ? <div className="timer-focus-context">{selectedTaskContext}</div> : null}
+        <div className="timer-focus-label">{selectedOutcomeName ? "Now focusing" : "Not focusing"}</div>
+        <div className="timer-focus-name">{selectedOutcomeName || "Pick an outcome to start"}</div>
+        {selectedOutcomeContext ? <div className="timer-focus-context">{selectedOutcomeContext}</div> : null}
       </div>
 
       <div className="timer-view-toggle" role="tablist" aria-label="Timer mode">
@@ -425,19 +282,7 @@ export function TimerCard({
         <div id="timerViewPanel" role="tabpanel">
           <div className="timer-preset-group">
             <div className="timer-preset-heading">Target</div>
-            <div
-              className={`timer-preset-scroll${timerPresetFade.showStart ? " fade-start" : ""}${timerPresetFade.showEnd ? " fade-end" : ""}`}
-            >
-              <div
-                ref={timerPresetScrollRef}
-                className="timer-preset-list"
-                role="group"
-                aria-label="Timer target presets"
-                onMouseDown={handleHorizontalDragStart}
-                onScroll={() => setTimerPresetFade(computeFadeState(timerPresetScrollRef.current))}
-                onWheel={handleHorizontalWheel}
-                onClickCapture={handleHorizontalDragClickCapture}
-              >
+            <HorizontalPillStrip ariaLabel="Timer target presets">
                 {DURATION_PRESETS_MINUTES.map((minutes) => (
                   <button
                     key={minutes}
@@ -481,8 +326,7 @@ export function TimerCard({
                     Custom
                   </button>
                 )}
-              </div>
-            </div>
+            </HorizontalPillStrip>
           </div>
 
           <h2 className="sr-only" id="timerTitle">Project Timer</h2>
@@ -518,19 +362,7 @@ export function TimerCard({
         <div className="manual-log-panel" id="timerViewPanel" role="tabpanel">
           <div className="timer-preset-group">
             <div className="timer-preset-heading">Time spent</div>
-            <div
-              className={`timer-preset-scroll${manualPresetFade.showStart ? " fade-start" : ""}${manualPresetFade.showEnd ? " fade-end" : ""}`}
-            >
-              <div
-                ref={manualPresetScrollRef}
-                className="timer-preset-list"
-                role="group"
-                aria-label="Manual duration presets"
-                onMouseDown={handleHorizontalDragStart}
-                onScroll={() => setManualPresetFade(computeFadeState(manualPresetScrollRef.current))}
-                onWheel={handleHorizontalWheel}
-                onClickCapture={handleHorizontalDragClickCapture}
-              >
+            <HorizontalPillStrip ariaLabel="Manual duration presets">
                 {DURATION_PRESETS_MINUTES.map((minutes) => (
                   <button
                     key={minutes}
@@ -581,51 +413,14 @@ export function TimerCard({
                     Custom
                   </button>
                 )}
-              </div>
-            </div>
+            </HorizontalPillStrip>
           </div>
 
-          {recentTaskSlots.length ? (
-            <div className="manual-slot-group">
-              <div className="manual-slot-heading-row">
-                <div className="manual-slot-heading">Recent slots from the last 3 days</div>
-                <button className="manual-slot-clear-btn" type="button" onClick={onClearRecentSlots}>
-                  Clear
-                </button>
-              </div>
-              <div
-                className={`manual-slot-scroll${recentSlotFade.showStart ? " fade-start" : ""}${recentSlotFade.showEnd ? " fade-end" : ""}`}
-              >
-                <div
-                  ref={recentSlotScrollRef}
-                  className="manual-slot-list"
-                  onMouseDown={handleHorizontalDragStart}
-                  onScroll={() => setRecentSlotFade(computeFadeState(recentSlotScrollRef.current))}
-                  onWheel={handleHorizontalWheel}
-                  onClickCapture={handleHorizontalDragClickCapture}
-                >
-                {recentTaskSlots.map((slot) => (
-                  <button
-                    key={slot.id}
-                    className={`manual-slot-chip${selectedManualSlotId === slot.id ? " active" : ""}`}
-                    type="button"
-                    onMouseDown={(event) => {
-                      event.preventDefault();
-                      applyRecentSlot(slot);
-                    }}
-                    onClick={() => applyRecentSlot(slot)}
-                  >
-                    <span>{slot.taskText}</span>
-                    <span>
-                      {slot.workspaceName} / {slot.projectName}
-                      {slot.lastDurationSeconds ? ` / ${formatManualDuration(slot.lastDurationSeconds)}` : ""}
-                    </span>
-                  </button>
-                ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
+          <SessionLabelField
+            value={sessionLabel}
+            onChange={setSessionLabel}
+            inputId="manualSessionLabelInput"
+          />
 
           <div className="timer-actions manual-actions">
             <button

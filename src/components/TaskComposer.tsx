@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { Task, TaskDraft } from "../types/app";
+import type { Outcome, OutcomeDraft } from "../types/app";
 
 type TaskComposerProps = {
   isOpen: boolean;
-  editingTask: Task | null;
-  taskTypeOptions: string[];
+  editingOutcome: Outcome | null;
+  outcomeTypeOptions: string[];
   onOpen?: () => void;
   onCancel: () => void;
-  onSave: (draft: TaskDraft, customType: string) => void;
+  onSave: (draft: OutcomeDraft, customType: string) => void;
   hideTrigger?: boolean;
   highlightTrigger?: boolean;
   className?: string;
@@ -32,8 +32,8 @@ const emptyForm: FormState = {
 
 export function TaskComposer({
   isOpen,
-  editingTask,
-  taskTypeOptions,
+  editingOutcome,
+  outcomeTypeOptions,
   onOpen,
   onCancel,
   onSave,
@@ -42,7 +42,7 @@ export function TaskComposer({
   className = ""
 }: TaskComposerProps) {
   const [form, setForm] = useState<FormState>(emptyForm);
-  const taskInputRef = useRef<HTMLInputElement | null>(null);
+  const outcomeInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -50,23 +50,23 @@ export function TaskComposer({
       return;
     }
 
-    if (editingTask) {
-      const normalizedType = (editingTask.type || "").toLowerCase();
+    if (editingOutcome) {
+      const normalizedType = (editingOutcome.type || "").toLowerCase();
       setForm({
-        text: editingTask.text,
-        type: taskTypeOptions.includes(normalizedType) ? normalizedType : "__custom__",
-        customType: taskTypeOptions.includes(normalizedType) ? "" : editingTask.type || "",
-        notes: editingTask.notes || "",
-        agentEligible: Boolean(editingTask.agentEligible)
+        text: editingOutcome.title,
+        type: outcomeTypeOptions.includes(normalizedType) ? normalizedType : "__custom__",
+        customType: outcomeTypeOptions.includes(normalizedType) ? "" : editingOutcome.type || "",
+        notes: editingOutcome.notes || "",
+        agentEligible: Boolean(editingOutcome.agentEligible)
       });
     } else {
       setForm(emptyForm);
     }
 
     window.setTimeout(() => {
-      taskInputRef.current?.focus();
+      outcomeInputRef.current?.focus();
     }, 0);
-  }, [editingTask, isOpen, taskTypeOptions]);
+  }, [editingOutcome, isOpen, outcomeTypeOptions]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,7 +85,7 @@ export function TaskComposer({
 
     onSave(
       {
-        text,
+        title: text,
         type,
         notes: form.notes.trim(),
         agentEligible: form.agentEligible
@@ -98,7 +98,7 @@ export function TaskComposer({
     <>
       {!isOpen && !hideTrigger ? (
         <button className={`add-task-tile${highlightTrigger ? " idle-sheen" : ""}`} id="showTaskFormBtn" type="button" onClick={onOpen}>
-          ⊕ Add Task
+          ⊕ Add Outcome
         </button>
       ) : null}
 
@@ -107,13 +107,13 @@ export function TaskComposer({
           <div className="task-form-grid">
             <div className="task-input-row">
               <input
-                ref={taskInputRef}
+                ref={outcomeInputRef}
                 className="task-input"
                 id="taskInput"
                 type="text"
                 maxLength={100}
                 placeholder="What are you working on?"
-                aria-label="Task name"
+                aria-label="Outcome name"
                 value={form.text}
                 onChange={(event) => setForm((current) => ({ ...current, text: event.target.value }))}
               />
@@ -123,7 +123,7 @@ export function TaskComposer({
               <select
                 className="task-input task-type-select"
                 id="taskTypeInput"
-                aria-label="Task type"
+                aria-label="Outcome type"
                 value={form.type}
                 onChange={(event) => {
                   const nextType = event.target.value;
@@ -134,8 +134,8 @@ export function TaskComposer({
                   }));
                 }}
               >
-                <option value="">Select task type</option>
-                {taskTypeOptions.map((type) => (
+                <option value="">Select outcome type</option>
+                {outcomeTypeOptions.map((type) => (
                   <option key={type} value={type}>
                     {type[0].toUpperCase() + type.slice(1)}
                   </option>
@@ -150,8 +150,8 @@ export function TaskComposer({
                 id="taskTypeCustomInput"
                 type="text"
                 maxLength={40}
-                placeholder="Add a task type"
-                aria-label="Add a task type"
+                placeholder="Add an outcome type"
+                aria-label="Add an outcome type"
                 value={form.customType}
                 onChange={(event) => setForm((current) => ({ ...current, customType: event.target.value }))}
               />
@@ -163,7 +163,7 @@ export function TaskComposer({
                 id="taskNotesInput"
                 maxLength={400}
                 placeholder="Notes"
-                aria-label="Task notes"
+                aria-label="Outcome notes"
                 value={form.notes}
                 onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
               ></textarea>
@@ -186,7 +186,7 @@ export function TaskComposer({
 
             <div className="task-form-actions">
               <button className="task-form-btn primary" type="submit">
-                {editingTask ? "Save Changes" : "Save Task"}
+                {editingOutcome ? "Save Changes" : "Save Outcome"}
               </button>
               <button className="task-form-btn ghost" type="button" id="cancelTaskBtn" onClick={onCancel}>
                 Cancel
