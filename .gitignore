@@ -5,3 +5,4 @@ test-results
 dist
 .env
 .env.local
+tmp

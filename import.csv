@@ -1,0 +1,68 @@
+﻿Entry,AI workflow,Days,Hours,Minutes,Notes,Project,Start datetime,Task type,Workspace
+Refine user stories for KEx,No,0.471,11.3,675,,Product operations,"February 21, 2026 3:00 AM (GMT+8)",Scoping,KadaKareer
+Create product operations databases and dashboards in Notion,No,0.771,18.5,1110,,Product operations,"December 17, 2025 5:00 PM (GMT+8)",Admin,KadaKareer
+"Squad kick-offs for KKF, VirApp",No,0.083,2,120,,Product operations,"February 26, 2026 2:00 AM (GMT+8)",Meetings,KadaKareer
+Async discussion with virapp PMs and TL,No,0.017,0.4,25,,Product operations,"March 1, 2026 5:00 PM (GMT+8)",Scoping,KadaKareer
+Timer prototype,Yes,0.125,3,180,,Time,"March 23, 2026 5:00 PM (GMT+8)",Development,Personal
+Timer prototype,Yes,0.013,0.3,20,,Time,"March 23, 2026 3:22 PM (GMT+8)",Development,Personal
+Timer prototype,Yes,0.013,0.3,20,,Time,"March 23, 2026 4:30 PM (GMT+8)",Development,Personal
+KEx Sync,No,0.042,1,60,,Product operations,"March 24, 2026 3:00 AM (GMT+8)",Meetings,KadaKareer
+PM Sync,No,0.042,1,60,,Product operations,"March 24, 2026 4:00 AM (GMT+8)",Meetings,KadaKareer
+Emails and chats,No,0.017,0.4,25,,Admin (Emails chats etc),"March 24, 2026 9:25 AM (GMT+8)",Admin,Macquarie
+Emails and chats,No,0.017,0.4,25,,Admin (Emails chats etc),"March 24, 2026 11:00 AM (GMT+8)",Admin,Macquarie
+ORFR,Yes,0.013,0.3,20,Planning and understanding requirements and polishing AI workflow,Reporting,"March 24, 2026 12:00 PM (GMT+8)",Development,Macquarie
+AI workflow,Yes,0.013,0.3,20,,Reporting,"March 24, 2026 12:00 PM (GMT+8)",Admin,Macquarie
+Timer prototype,Yes,0.042,1,60,,Time,"March 28, 2026 10:27 AM (GMT+8)",Development,Personal
+Timer prototype,Yes,0.013,0.3,15,Add log time feature,Time,"March 28, 2026 12:45 PM (GMT+8)",Development,Personal
+Timer prototype,Yes,0.013,0.3,15,Add log time feature,Time,"March 28, 2026 12:47 PM (GMT+8)",Development,Personal
+Exploration,No,0.013,0.3,15,Looking into deploying personal projects in private repositories and,General,"March 28, 2026 1:29 PM (GMT+8)",Admin,Personal
+UX polish,No,0.013,0.3,15,,Time,"March 28, 2026 3:35 PM (GMT+8)",Design,Personal
+UX polish,No,0.013,0.3,15,,Time,"March 28, 2026 3:58 PM (GMT+8)",Design,Personal
+UX polish,No,0.013,0.3,15,,Time,"March 28, 2026 4:13 PM (GMT+8)",Design,Personal
+Charts ideation,No,0.013,0.3,15,,Afterlight,"March 28, 2026 8:22 PM (GMT+8)",product,Personal
+Charts ideation,No,0.013,0.3,15,,Afterlight,"March 28, 2026 8:41 PM (GMT+8)",product,Personal
+Cloning notes,No,0.017,0.4,25,Identifying best workflow to track decisions I make,Clone,"March 28, 2026 10:55 PM (GMT+8)",Admin,Personal
+Ideation,No,0.017,0.4,25,Identifying best workflow to track decisions I make,Brain,"March 29, 2026 7:54 AM (GMT+8)",Admin,Personal
+Emails and chats,No,0.013,0.3,15,,Admin (Emails chats etc),"March 30, 2026 9:07 AM (GMT+8)",Admin,Macquarie
+WO decomm phase 2,Yes,0.013,0.3,15,,Reporting,"March 30, 2026 9:34 AM (GMT+8)",Development,Macquarie
+AOWR-1232 dev,Yes,0.013,0.3,15,,Reporting,"March 30, 2026 9:55 AM (GMT+8)",Development,Macquarie
+AOWR-1232 dev,Yes,0.013,0.3,15,,Reporting,"March 30, 2026 10:10 AM (GMT+8)",Development,Macquarie
+Emails and chats,No,0.013,0.3,15,,Admin (Emails chats etc),"March 30, 2026 11:08 AM (GMT+8)",Admin,Macquarie
+AOWR-1232 debugging link outs,Yes,0.021,0.5,30,,Reporting,"March 30, 2026 1:57 PM (GMT+8)",Development,Macquarie
+Charts ideation,No,0.013,0.3,20,,Afterlight,"March 30, 2026 7:24 PM (GMT+8)",product,Personal
+Feature,No,0.013,0.3,15,,Afterlight,"March 30, 2026 7:41 PM (GMT+8)",Development,Personal
+Feature,No,0.013,0.3,15,,Afterlight,"March 30, 2026 8:22 PM (GMT+8)",Development,Personal
+Charts ideation,No,0.013,0.3,15,,Afterlight,"March 30, 2026 8:51 PM (GMT+8)",product,Personal
+Charts ideation,No,0.013,0.3,20,,Afterlight,"March 30, 2026 9:01 PM (GMT+8)",product,Personal
+AOWR-1232 debugging link outs,Yes,0.017,0.4,25,,Reporting,"March 31, 2026 8:41 AM (GMT+8)",Development,Macquarie
+AOWR-1785 addressing PR review,No,0.017,0.4,25,,Reporting,"March 31, 2026 9:21 AM (GMT+8)",Development,Macquarie
+AOWR-1785 addressing PR review,No,0.017,0.4,25,,Reporting,"March 31, 2026 9:49 AM (GMT+8)",Development,Macquarie
+AOWR-1785 addressing PR review,No,0.017,0.4,25,,Reporting,"March 31, 2026 10:22 AM (GMT+8)",Development,Macquarie
+AOWR-1232 debugging link outs,Yes,0.013,0.3,20,,Reporting,"March 31, 2026 11:22 AM (GMT+8)",Development,Macquarie
+AOWR-1232 debugging link outs,Yes,0.017,0.4,25,,Reporting,"March 31, 2026 1:36 PM (GMT+8)",Development,Macquarie
+AOWR-1232 debugging link outs,Yes,0.017,0.4,25,,Reporting,"March 31, 2026 2:38 PM (GMT+8)",Development,Macquarie
+AOWR-1232 debugging link outs,Yes,0.017,0.4,25,,Reporting,"March 31, 2026 3:30 PM (GMT+8)",Development,Macquarie
+AOWR-1232 debugging link outs,Yes,0.017,0.4,25,,Reporting,"March 31, 2026 4:04 PM (GMT+8)",Development,Macquarie
+Project management,No,0.008,0.2,10,,General,"March 31, 2026 6:14 PM (GMT+8)",Admin,Personal
+Supabase refactor,No,0.017,0.4,25,,Time,"March 31, 2026 7:05 PM (GMT+8)",Development,Personal
+Supabase refactor,No,0.017,0.4,25,,Time,"March 31, 2026 7:34 PM (GMT+8)",Development,Personal
+Emails and chats,No,0.017,0.4,25,,Admin (Emails chats etc),"April 1, 2026 8:45 AM (GMT+8)",Admin,Macquarie
+AOWR-1232 debugging link outs,Yes,0.013,0.3,15,,Reporting,"April 1, 2026 9:03 AM (GMT+8)",Development,Macquarie
+AOWR-1232 debugging link outs,Yes,0.017,0.4,25,,Reporting,"April 1, 2026 9:36 AM (GMT+8)",Development,Macquarie
+Emails and chats,No,0.017,0.4,25,,Admin (Emails chats etc),"April 1, 2026 10:45 AM (GMT+8)",Admin,Macquarie
+Emails and chats,No,0.017,0.4,25,,Admin (Emails chats etc),"April 1, 2026 11:43 AM (GMT+8)",Admin,Macquarie
+AOWR-1784 remove linkouts,No,0.017,0.4,25,,Reporting,"April 1, 2026 3:03 PM (GMT+8)",Development,Macquarie
+AOWR-1784 remove linkouts,No,0.017,0.4,25,,Reporting,"April 1, 2026 3:52 PM (GMT+8)",Development,Macquarie
+Supabase refactor,No,0.017,0.4,25,,Time,"April 1, 2026 6:12 PM (GMT+8)",Development,Personal
+Supabase refactor,No,0.017,0.4,25,,Time,"April 1, 2026 6:46 PM (GMT+8)",Development,Personal
+Supabase refactor,No,0.017,0.4,25,,Time,"April 1, 2026 7:11 PM (GMT+8)",Development,Personal
+Supabase refactor,No,0.013,0.3,20,,Time,"April 1, 2026 7:53 PM (GMT+8)",Development,Personal
+Supabase auth,No,0.017,0.4,25,,Time,"April 1, 2026 9:48 PM (GMT+8)",Development,Personal
+Supabase auth,No,0.017,0.4,25,,Time,"April 1, 2026 10:14 PM (GMT+8)",Development,Personal
+Supabase refactor,No,0.017,0.4,25,,Time,"April 2, 2026 8:12 AM (GMT+8)",Development,Personal
+Prototype,No,0.017,0.4,25,,Brain,"April 2, 2026 9:28 AM (GMT+8)",Development,Personal
+Prototype,No,0.017,0.4,25,,Brain,"April 2, 2026 9:58 AM (GMT+8)",Development,Personal
+Prototype,No,0.017,0.4,25,,Brain,"April 2, 2026 10:42 AM (GMT+8)",Development,Personal
+Prototype,No,0.017,0.4,25,,Brain,"April 2, 2026 11:07 AM (GMT+8)",Development,Personal
+Prototype,No,0.017,0.4,25,,Brain,"April 2, 2026 3:53 PM (GMT+8)",Development,Personal
+Supabase refactor,No,0.017,0.4,25,,Time,"April 2, 2026 6:39 PM (GMT+8)",Development,Personal

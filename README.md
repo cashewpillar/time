@@ -44,3 +44,30 @@ When Supabase is configured and you sign in, the app syncs the normalized state 
 
 The current sync model is user-scoped with Supabase Auth and RLS.
 The app also enforces a single allowed email address from `VITE_ALLOWED_EMAIL`.
+
+## CSV import
+
+If you have a denormalized CSV like [`import.csv`](/Users/halloween/Dev/apps/time/import.csv), you can normalize it into the app's sync model with:
+
+```bash
+npm run import:normalize
+```
+
+That writes [`normalized-state.json`](/Users/halloween/Dev/apps/time/tmp/import/normalized-state.json) under `tmp/import/`.
+
+If you also pass a Supabase auth user id, it generates SQL ready for the tables in [`supabase/schema.sql`](/Users/halloween/Dev/apps/time/supabase/schema.sql):
+
+```bash
+node scripts/normalize-import.mjs import.csv --user-id YOUR_AUTH_USER_ID
+```
+
+The importer applies these normalization rules:
+- `Workspace` -> `workspaces`
+- `Project` -> `projects` within each workspace
+- `Entry` -> deduplicated `outcomes` per workspace/project/title
+- Each CSV row -> one historical `burst`
+- `AI workflow` -> `agent_eligible`
+- `Task type` -> `type`
+- `Notes` -> `notes`
+- `Minutes`/`Hours`/`Days` -> `duration_seconds`
+- `Start datetime` -> `logged_at`
