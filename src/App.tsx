@@ -56,7 +56,7 @@ function App() {
   const projectOutcomes = useMemo(() => activeProject ? getOutcomesForProjectId(state, activeProject.id) : [], [activeProject, state]);
   const outcomeTypeOptions = useMemo(() => getOutcomeTypeOptions(state.customOutcomeTypes), [state.customOutcomeTypes]);
   const isOutcomeComposerOpen = state.isOutcomeFormOpen && !editingOutcome;
-  const shouldExpandTasksCard = isTaskQueueExpanded || isSelectedBurstHistoryOpen || state.isOutcomeFormOpen || state.isProjectMenuOpen;
+  const shouldExpandTasksCard = isTaskQueueExpanded || isSelectedBurstHistoryOpen || state.isOutcomeFormOpen;
   const shouldHighlightTimerStart = !state.isRunning && Boolean(selectedOutcome);
   const selectedOutcomeContext = selectedOutcome && activeWorkspace && activeProject
     ? `${activeWorkspace.name} / ${activeProject.name}`
@@ -347,7 +347,7 @@ function App() {
 
       <main className="main">
         <section
-          className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}`}
+          className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}${state.isProjectMenuOpen ? " menu-open" : ""}`}
           aria-labelledby="tasksHeading"
           style={!shouldExpandTasksCard && isDesktopLayout && collapsedTasksHeight ? { height: `${collapsedTasksHeight}px` } : undefined}
         >

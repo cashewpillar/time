@@ -1781,6 +1781,10 @@ button {
     overflow: hidden;
   }
 
+  .tasks-section-top.menu-open:not(.expanded) {
+    overflow: visible;
+  }
+
   .task-input-row,
   .task-form-actions {
     flex-direction: row;

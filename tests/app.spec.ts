@@ -227,5 +227,6 @@ test("desktop task card expands for entry history and project dropdown overlays"
   await expect(tasksSection).not.toHaveClass(/expanded/);
 
   await app.openProjectMenu();
-  await expect(tasksSection).toHaveClass(/expanded/);
+  await expect(tasksSection).not.toHaveClass(/expanded/);
+  await expect(app.projectDropdown).toBeVisible();
 });
