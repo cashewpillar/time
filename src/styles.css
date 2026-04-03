@@ -1197,33 +1197,6 @@ button {
   gap: 4px;
 }
 
-.trends-insights {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.trends-insight-card {
-  display: grid;
-  gap: 3px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--overlay-medium);
-}
-
-.trends-insight-card strong {
-  color: var(--white);
-  font-size: 0.88rem;
-  line-height: 1.2;
-}
-
-.trends-insight-card span {
-  color: var(--text-soft);
-  font-size: 0.76rem;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
 .trends-day-detail-card {
   display: grid;
   gap: 8px;
@@ -2032,7 +2005,7 @@ button {
 
   .main {
     width: min(100%, 1100px);
-    grid-template-columns: minmax(0, 1.02fr) minmax(260px, 0.76fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
     gap: 14px;
   }
@@ -2121,10 +2094,6 @@ button {
 
   .trends-day-labels {
     padding-top: 16px;
-  }
-
-  .trends-insights {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .mobile-timer-reminder {
