@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { playTimerStart, startTimerCompleteAlarm, stopTimerCompleteAlarm } from "./lib/audio";
 import { requestTimerNotificationPermission, showTimerCompleteNotification } from "./lib/notifications";
 import { parseTimerInput } from "./lib/time";
+import { ActivityHeatmap } from "./components/ActivityHeatmap";
 import { ProjectTabs } from "./components/ProjectTabs";
 import { SessionLabelField } from "./components/SessionLabelField";
 import { TaskList } from "./components/TaskList";
@@ -39,6 +40,7 @@ function App() {
   const [completionBurstId, setCompletionBurstId] = useState<string | null>(null);
   const [completionSessionLabel, setCompletionSessionLabel] = useState("");
   const [isSyncInfoVisible, setIsSyncInfoVisible] = useState(false);
+  const [isTrendsOpen, setIsTrendsOpen] = useState(false);
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [theme, setTheme] = useState<ThemeName>(() => {
@@ -336,13 +338,24 @@ function App() {
             onCreate={() => dispatch({ type: "create-workspace", now: Date.now() })}
           />
         </div>
-        <button
-          className={`sync-status-trigger${syncInfo.status === "error" ? " error" : ""}`}
-          type="button"
-          onClick={() => setIsSyncInfoVisible(true)}
-        >
-          {syncTriggerLabel}
-        </button>
+        <div className="topbar-actions">
+          <button
+            className={`header-action-trigger${isTrendsOpen ? " active" : ""}`}
+            type="button"
+            aria-pressed={isTrendsOpen}
+            aria-controls="trendsPanel"
+            onClick={() => setIsTrendsOpen((current) => !current)}
+          >
+            Trends
+          </button>
+          <button
+            className={`sync-status-trigger${syncInfo.status === "error" ? " error" : ""}`}
+            type="button"
+            onClick={() => setIsSyncInfoVisible(true)}
+          >
+            {syncTriggerLabel}
+          </button>
+        </div>
       </header>
 
       <main className="main">
@@ -405,6 +418,13 @@ function App() {
             onManualLog={handleManualLog}
           />
         </section>
+
+        {isTrendsOpen ? (
+          <section className="timer-card trends-card" id="trendsPanel" aria-labelledby="trendsHeading">
+            <h2 className="sr-only" id="trendsHeading">Trends</h2>
+            <ActivityHeatmap bursts={state.bursts} />
+          </section>
+        ) : null}
       </main>
 
       <div className="theme-switcher" aria-label="Color theme">

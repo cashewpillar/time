@@ -171,11 +171,22 @@ test("live timer and manual log expose duration presets", async ({ page }) => {
 test("remembers the last visited timer mode after reload", async ({ page }) => {
   const app = new AppPage(page);
 
-  await app.timerModeLogTime.click();
+  await app.timerModeToday.click();
   await page.reload();
 
-  await expect(app.timerModeLogTime).toHaveAttribute("aria-selected", "true");
-  await expect(app.manualDurationPresets).toBeVisible();
+  await expect(app.timerModeToday).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByText("No bursts logged yet.", { exact: true })).toBeVisible();
+});
+
+test("trends opens from the page header instead of the timer tabs", async ({ page }) => {
+  const app = new AppPage(page);
+
+  await expect(app.page.getByRole("tab", { name: /trends/i })).toHaveCount(0);
+  await app.trendsToggle.click();
+
+  await expect(app.trendsToggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#trendsPanel")).toBeVisible();
+  await expect(page.getByLabel("Daily tracked time heatmap")).toBeVisible();
 });
 
 test("manual log mode saves time against the selected outcome and shows entry history", async ({ page }) => {
@@ -198,6 +209,24 @@ test("manual log mode saves time against the selected outcome and shows entry hi
   await page.getByRole("button", { name: "Show entry log", exact: true }).click();
   await expect(page.locator(".burst-history-meta")).toContainText("00:30");
   await expect(page.locator(".timer-focus-name")).toContainText("Desk planning");
+});
+
+test("today mode shows grouped bursts logged for the current day", async ({ page }) => {
+  const app = new AppPage(page);
+
+  await app.createOutcome({
+    name: "Desk planning",
+    type: "design"
+  });
+
+  await app.logManualTime("00:30");
+  await app.logManualTime("00:45");
+  await app.timerModeToday.click();
+
+  await expect(page.getByText("1h 15m tracked", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Today's bursts")).toContainText("Desk planning");
+  await expect(page.getByLabel("Today's bursts")).toContainText("2 bursts");
+  await expect(page.getByLabel("Today's bursts")).toContainText("1h 15m");
 });
 
 test("other outcomes are sorted by latest tracked burst", async ({ page }) => {
