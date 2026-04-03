@@ -171,19 +171,6 @@ export function TaskComposer({
           </div>
 
           <div className="task-form-footer">
-            <div className="task-input-row task-checkbox-wrap">
-              <label className="task-checkbox-row" htmlFor="taskAgentEligibleInput">
-                <input
-                  className="task-checkbox"
-                  id="taskAgentEligibleInput"
-                  type="checkbox"
-                  checked={form.agentEligible}
-                  onChange={(event) => setForm((current) => ({ ...current, agentEligible: event.target.checked }))}
-                />
-                <span>Can be handled by an AI agent</span>
-              </label>
-            </div>
-
             <div className="task-form-actions">
               <button className="task-form-btn primary" type="submit">
                 {editingOutcome ? "Save Changes" : "Save Outcome"}

@@ -128,30 +128,26 @@ test("always shows two project tabs and keeps the active visible tab in place", 
   await expect(projectTabs.nth(1)).toHaveClass(/active/);
 });
 
-test("outcome form supports built-in types, custom types, AI eligibility, and editing", async ({ page }) => {
+test("outcome form supports built-in types, custom types, and editing", async ({ page }) => {
   const app = new AppPage(page);
 
   await app.createOutcome({
     name: "Build onboarding flow",
     type: "development",
-    notes: "Implement the happy path first.",
-    aiEligible: true
+    notes: "Implement the happy path first."
   });
 
   await expect(page.locator(".task-name")).toContainText("Build onboarding flow");
   await expect(page.locator(".burst-summary-pill-type")).toContainText("development");
-  await expect(page.locator(".task-badge")).toContainText("AI Agent OK");
   await expect(page.locator(".task-notes-copy")).toContainText("Implement the happy path first.");
 
   await app.editFirstOutcome({
     type: "__custom__",
     customType: "research",
-    notes: "Investigate implementation options.",
-    aiEligible: false
+    notes: "Investigate implementation options."
   });
 
   await expect(page.locator(".burst-summary-pill-type")).toContainText("research");
-  await expect(page.locator(".task-badge")).toHaveCount(0);
   await expect(page.locator(".task-notes-copy")).toContainText("Investigate implementation options.");
 
   await app.openAddOutcomeForm();
@@ -224,6 +220,7 @@ test("other outcomes are sorted by latest tracked burst", async ({ page }) => {
   await app.logManualTime("00:45");
 
   await app.selectOutcome("Gamma planning");
+  await page.getByRole("button", { name: /other outcomes .*show/i }).click();
 
   const queueNames = await page.locator(".task-queue-list .task-name").allTextContents();
   expect(queueNames).toEqual(["Beta planning", "Alpha planning"]);

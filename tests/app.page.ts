@@ -4,14 +4,12 @@ type OutcomeInput = {
   name: string;
   type: string;
   notes?: string;
-  aiEligible?: boolean;
   customType?: string;
 };
 
 type OutcomeEditInput = {
   type?: string;
   notes?: string;
-  aiEligible?: boolean;
   customType?: string;
 };
 
@@ -27,7 +25,6 @@ export class AppPage {
   readonly outcomeTypeSelect: Locator;
   readonly customOutcomeTypeInput: Locator;
   readonly outcomeNotesInput: Locator;
-  readonly aiEligibleCheckbox: Locator;
   readonly timerModeLogTime: Locator;
   readonly timerModeLiveTimer: Locator;
   readonly manualDurationHoursInput: Locator;
@@ -48,7 +45,6 @@ export class AppPage {
     this.outcomeTypeSelect = page.getByLabel("Outcome type", { exact: true });
     this.customOutcomeTypeInput = page.getByLabel("Add an outcome type", { exact: true });
     this.outcomeNotesInput = page.getByLabel("Outcome notes");
-    this.aiEligibleCheckbox = page.getByLabel(/can be handled by an ai agent/i);
     this.timerModeLiveTimer = page.getByRole("tab", { name: /live timer/i });
     this.timerModeLogTime = page.getByRole("tab", { name: /log time|time logger/i });
     this.manualDurationHoursInput = page.getByLabel("Manual duration hours");
@@ -116,10 +112,18 @@ export class AppPage {
   }
 
   async openAddOutcomeForm(): Promise<void> {
+    const isAddOutcomeVisible = await this.addOutcomeButton.isVisible();
+    if (!isAddOutcomeVisible) {
+      const queueToggle = this.page.getByRole("button", { name: /other outcomes .*show|outcomes 0 show/i });
+      if (await queueToggle.isVisible()) {
+        await queueToggle.click();
+      }
+    }
+
     await this.addOutcomeButton.click();
   }
 
-  async createOutcome({ name, type, notes, aiEligible = false, customType }: OutcomeInput): Promise<void> {
+  async createOutcome({ name, type, notes, customType }: OutcomeInput): Promise<void> {
     await this.openAddOutcomeForm();
     await this.outcomeNameInput.fill(name);
     await this.outcomeTypeSelect.selectOption(type);
@@ -133,14 +137,10 @@ export class AppPage {
       await this.outcomeNotesInput.fill(notes);
     }
 
-    if (aiEligible) {
-      await this.aiEligibleCheckbox.check();
-    }
-
     await this.page.getByRole("button", { name: /save outcome/i }).click();
   }
 
-  async editFirstOutcome({ type, notes, aiEligible, customType }: OutcomeEditInput): Promise<void> {
+  async editFirstOutcome({ type, notes, customType }: OutcomeEditInput): Promise<void> {
     await this.page.getByRole("button", { name: /edit outcome/i }).click();
 
     if (type) {
@@ -156,19 +156,19 @@ export class AppPage {
       await this.outcomeNotesInput.fill(notes);
     }
 
-    if (typeof aiEligible === "boolean") {
-      if (aiEligible) {
-        await this.aiEligibleCheckbox.check();
-      } else {
-        await this.aiEligibleCheckbox.uncheck();
-      }
-    }
-
     await this.page.getByRole("button", { name: /save changes/i }).click();
   }
 
   async selectOutcome(name: string): Promise<void> {
-    await this.page.locator(".task-copy").filter({ hasText: name }).first().click();
+    const outcome = this.page.locator(".task-copy").filter({ hasText: name }).first();
+    if (!(await outcome.isVisible())) {
+      const queueToggle = this.page.getByRole("button", { name: /other outcomes .*show|outcomes 0 show/i });
+      if (await queueToggle.isVisible()) {
+        await queueToggle.click();
+      }
+    }
+
+    await outcome.click();
   }
 
   async logManualTime(duration: string): Promise<void> {

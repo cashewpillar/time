@@ -187,11 +187,6 @@ export function TaskList({
           ) : (
             <>
               <div className="task-name">{outcome.title}</div>
-              {outcome.agentEligible ? (
-                <div className="task-badges">
-                  {outcome.agentEligible ? <span className="task-badge">AI Agent OK</span> : null}
-                </div>
-              ) : null}
               <div className="burst-summary">
                 {outcome.type ? <span className="burst-summary-pill burst-summary-pill-type">{outcome.type}</span> : null}
                 <span className="burst-summary-pill">{outcomeBursts.length} burst{outcomeBursts.length === 1 ? "" : "s"}</span>
