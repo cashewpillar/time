@@ -830,7 +830,13 @@ export function appReducer(state: AppState, action: AppAction): AppState {
     case "pause-timer":
       return { ...state, isRunning: false, lastTickAt: null, status: "Timer paused." };
     case "reset-timer":
-      return { ...state, isRunning: false, elapsedSeconds: 0, lastTickAt: null, status: "Timer reset to 00:00." };
+      return {
+        ...state,
+        isRunning: false,
+        elapsedSeconds: 0,
+        lastTickAt: null,
+        status: `Timer reset to ${Math.floor(state.targetSeconds / 60).toString().padStart(2, "0")}:${(state.targetSeconds % 60).toString().padStart(2, "0")}.`
+      };
     case "tick": {
       if (!state.isRunning || !state.lastTickAt) return state;
       const elapsedSinceLastTick = Math.floor((action.now - state.lastTickAt) / 1000);

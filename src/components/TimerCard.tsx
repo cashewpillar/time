@@ -124,7 +124,8 @@ export function TimerCard({
     window.localStorage.setItem(CUSTOM_MANUAL_OPEN_KEY, String(showCustomManualInput));
   }, [showCustomManualInput]);
 
-  const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 ? "Start" : "Resume");
+  const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds);
+  const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 || elapsedSeconds >= targetSeconds ? "Start" : "Resume");
   const startDisabled = !selectedOutcomeName && !isRunning;
   const startTooltip = "Select an outcome before starting the timer.";
   const hasManualTarget = Boolean(selectedOutcomeName);
@@ -342,7 +343,7 @@ export function TimerCard({
 
             <h2 className="sr-only" id="timerTitle">Project Timer</h2>
             <div className="timer-readout" id="timerDisplay" aria-live="polite">
-              {formatTimerTime(elapsedSeconds)}
+              {formatTimerTime(remainingSeconds)}
             </div>
 
             <div className="timer-actions">

@@ -33,6 +33,13 @@ type ActiveHeatmapTooltip = {
   anchorY: number;
 };
 
+type SelectedDayWorkItem = {
+  key: string;
+  label: string;
+  totalSeconds: number;
+  burstCount: number;
+};
+
 function getDateKey(timestamp: number): string {
   const date = new Date(timestamp);
   const year = date.getFullYear();
@@ -215,6 +222,7 @@ export function ActivityHeatmap({ bursts }: { bursts: Burst[] }) {
   const heatmapBodyRef = useRef<HTMLDivElement | null>(null);
   const [heatmapWeekCapacity, setHeatmapWeekCapacity] = useState(MIN_HEATMAP_WEEKS);
   const [activeHeatmapTooltip, setActiveHeatmapTooltip] = useState<ActiveHeatmapTooltip | null>(null);
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
 
   useEffect(() => {
     const node = heatmapBodyRef.current;
@@ -257,6 +265,33 @@ export function ActivityHeatmap({ bursts }: { bursts: Burst[] }) {
   const heatmap = buildHeatmapCells(bursts);
   const heatmapWeeks = groupHeatmapCellsByWeek(heatmap.cells, Math.max(heatmapWeekCapacity, Math.ceil(heatmap.cells.length / 7)));
   const heatmapRangeLabel = `${heatmap.cells[0]?.dayLabel || ""} to ${heatmap.cells[heatmap.cells.length - 1]?.dayLabel || ""}`;
+  const selectedDayCell = selectedDateKey ? heatmap.cells.find((cell) => cell.dateKey === selectedDateKey) || null : null;
+  const selectedDayWorkItems = selectedDateKey
+    ? Array.from(
+        bursts.reduce((items, burst) => {
+          if (getDateKey(burst.loggedAt) !== selectedDateKey) return items;
+
+          const label = burst.sessionLabel.trim()
+            ? `${burst.title} -> ${burst.sessionLabel.trim()}`
+            : burst.title;
+          const existing = items.get(label);
+          if (existing) {
+            existing.totalSeconds += burst.durationSeconds;
+            existing.burstCount += 1;
+            return items;
+          }
+
+          items.set(label, {
+            key: label,
+            label,
+            totalSeconds: burst.durationSeconds,
+            burstCount: 1
+          });
+          return items;
+        }, new Map<string, SelectedDayWorkItem>())
+      ).map(([, item]) => item)
+        .sort((left, right) => right.totalSeconds - left.totalSeconds || right.burstCount - left.burstCount || left.label.localeCompare(right.label))
+    : [];
 
   function showHeatmapTooltip(cell: HeatmapCell, element: HTMLDivElement) {
     if (cell.isPadding || cell.isFuture) return;
@@ -271,6 +306,11 @@ export function ActivityHeatmap({ bursts }: { bursts: Burst[] }) {
 
   function hideHeatmapTooltip() {
     setActiveHeatmapTooltip(null);
+  }
+
+  function handleSelectHeatmapCell(cell: HeatmapCell) {
+    if (cell.isPadding || cell.isFuture || cell.durationSeconds <= 0) return;
+    setSelectedDateKey((current) => current === cell.dateKey ? null : cell.dateKey);
   }
 
   return (
@@ -314,12 +354,21 @@ export function ActivityHeatmap({ bursts }: { bursts: Burst[] }) {
                     {week.cells.map((cell) => (
                       <div
                         key={cell.dateKey}
-                        className={`trends-heatmap-cell level-${cell.intensityLevel}${cell.isToday ? " is-today" : ""}${cell.isFuture ? " is-future" : ""}${cell.isPadding ? " is-padding" : ""}`}
-                        tabIndex={cell.isPadding ? -1 : 0}
+                        className={`trends-heatmap-cell level-${cell.intensityLevel}${cell.isToday ? " is-today" : ""}${cell.isFuture ? " is-future" : ""}${cell.isPadding ? " is-padding" : ""}${cell.durationSeconds > 0 ? " has-entry" : ""}${selectedDateKey === cell.dateKey ? " selected" : ""}`}
+                        tabIndex={cell.isPadding || cell.isFuture || cell.durationSeconds <= 0 ? -1 : 0}
                         onMouseEnter={(event) => showHeatmapTooltip(cell, event.currentTarget)}
                         onMouseLeave={hideHeatmapTooltip}
                         onFocus={(event) => showHeatmapTooltip(cell, event.currentTarget)}
                         onBlur={hideHeatmapTooltip}
+                        onClick={() => handleSelectHeatmapCell(cell)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            handleSelectHeatmapCell(cell);
+                          }
+                        }}
+                        role={cell.durationSeconds > 0 && !cell.isFuture && !cell.isPadding ? "button" : undefined}
+                        aria-pressed={cell.durationSeconds > 0 && !cell.isFuture && !cell.isPadding ? selectedDateKey === cell.dateKey : undefined}
                         aria-label={cell.isPadding
                           ? "Heatmap padding"
                           : cell.isFuture
@@ -344,18 +393,37 @@ export function ActivityHeatmap({ bursts }: { bursts: Burst[] }) {
           <span>More</span>
         </div>
 
-        <div className="trends-insights">
-          <div className="trends-insight-card">
-            <span className="trends-insight-label">Busiest day</span>
-            <strong>{heatmap.busiestDay ? heatmap.busiestDay.dayLabel : "No data yet"}</strong>
-            <span>{heatmap.busiestDay ? formatHeatmapDuration(heatmap.busiestDay.durationSeconds) : "Start the timer or log time to fill this in."}</span>
+        {selectedDayCell ? (
+          <div className="trends-day-detail-card">
+            <span className="trends-insight-label">Worked on {selectedDayCell.fullDateLabel}</span>
+            <strong>{formatHeatmapDuration(selectedDayCell.durationSeconds)} across {selectedDayCell.burstCount} burst{selectedDayCell.burstCount === 1 ? "" : "s"}</strong>
+            {selectedDayWorkItems.length ? (
+              <div className="trends-day-detail-list">
+                {selectedDayWorkItems.map((item) => (
+                  <div key={item.key} className="trends-day-detail-row">
+                    <span>{item.label}</span>
+                    <strong>{formatHeatmapDuration(item.totalSeconds)}</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <span>No tracked work found for that day.</span>
+            )}
           </div>
-          <div className="trends-insight-card">
-            <span className="trends-insight-label">Source</span>
-            <strong>All cached bursts</strong>
-            <span>Built from local burst history, not just the current outcome.</span>
+        ) : (
+          <div className="trends-insights">
+            <div className="trends-insight-card">
+              <span className="trends-insight-label">Busiest day</span>
+              <strong>{heatmap.busiestDay ? heatmap.busiestDay.dayLabel : "No data yet"}</strong>
+              <span>{heatmap.busiestDay ? formatHeatmapDuration(heatmap.busiestDay.durationSeconds) : "Start the timer or log time to fill this in."}</span>
+            </div>
+            <div className="trends-insight-card">
+              <span className="trends-insight-label">Source</span>
+              <strong>All cached bursts</strong>
+              <span>Built from local burst history, not just the current outcome.</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {activeHeatmapTooltip && typeof document !== "undefined"
