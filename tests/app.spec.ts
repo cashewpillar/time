@@ -157,8 +157,11 @@ test("outcome form supports built-in types, custom types, and editing", async ({
 test("live timer and manual log expose duration presets", async ({ page }) => {
   const app = new AppPage(page);
 
+  await expect(page.locator(".timer-readout")).toHaveText("20:00");
+
   await app.setTimerPreset(25);
   await expect(page.locator(".timer-status")).toContainText("Timer target set to 25:00.");
+  await expect(page.locator(".timer-readout")).toHaveText("25:00");
 
   await app.setManualPreset(45);
   await expect(app.manualDurationPresets.getByRole("button", { name: "45m", exact: true })).toHaveClass(/active/);

@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import type { Burst } from "../types/app";
 import {
   formatManualDuration,
   formatTimerTime,
   parseManualDurationInput
 } from "../lib/time";
+import { ActivityHeatmap } from "./ActivityHeatmap";
 import { HorizontalPillStrip } from "./HorizontalPillStrip";
 import { SessionLabelField } from "./SessionLabelField";
 
@@ -14,12 +16,13 @@ const CUSTOM_MANUAL_HOURS_KEY = "time-custom-manual-hours-v1";
 const CUSTOM_MANUAL_MINUTES_KEY = "time-custom-manual-minutes-v1";
 const CUSTOM_MANUAL_OPEN_KEY = "time-custom-manual-open-v1";
 const DURATION_PRESETS_MINUTES = [10, 15, 20, 25, 30, 45];
-type TimerViewMode = "timer" | "manual";
+type TimerViewMode = "timer" | "manual" | "trends";
 
 type TimerCardProps = {
   elapsedSeconds: number;
   targetSeconds: number;
   isRunning: boolean;
+  bursts: Burst[];
   selectedOutcomeName: string | null;
   selectedOutcomeContext: string | null;
   timerStatusMessage: string | null;
@@ -35,6 +38,7 @@ export function TimerCard({
   elapsedSeconds,
   targetSeconds,
   isRunning,
+  bursts,
   selectedOutcomeName,
   selectedOutcomeContext,
   timerStatusMessage,
@@ -49,7 +53,7 @@ export function TimerCard({
   const [viewMode, setViewMode] = useState<TimerViewMode>(() => {
     if (typeof window === "undefined") return "timer";
     const saved = window.localStorage.getItem(TIMER_VIEW_MODE_KEY);
-    return saved === "manual" ? "manual" : "timer";
+    return saved === "manual" || saved === "trends" ? saved : "timer";
   });
   const [manualDurationDraft, setManualDurationDraft] = useState(() => {
     if (typeof window === "undefined") return "00:30";
@@ -120,7 +124,8 @@ export function TimerCard({
     window.localStorage.setItem(CUSTOM_MANUAL_OPEN_KEY, String(showCustomManualInput));
   }, [showCustomManualInput]);
 
-  const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 ? "Start" : "Resume");
+  const remainingSeconds = Math.max(0, targetSeconds - elapsedSeconds);
+  const startPauseLabel = isRunning ? "Pause" : (elapsedSeconds === 0 || elapsedSeconds >= targetSeconds ? "Start" : "Resume");
   const startDisabled = !selectedOutcomeName && !isRunning;
   const startTooltip = "Select an outcome before starting the timer.";
   const hasManualTarget = Boolean(selectedOutcomeName);
@@ -249,40 +254,51 @@ export function TimerCard({
         </div>
       ) : null}
 
-      <div className="timer-focus-banner">
-        <div className="timer-focus-label">{selectedOutcomeName ? "Now focusing" : "Not focusing"}</div>
-        <div className="timer-focus-name">{selectedOutcomeName || "Pick an outcome to start"}</div>
-        {selectedOutcomeContext ? <div className="timer-focus-context">{selectedOutcomeContext}</div> : null}
-      </div>
+      <div className="timer-card-inner">
+        <div className="timer-focus-banner">
+          <div className="timer-focus-label">{selectedOutcomeName ? "Now focusing" : "Not focusing"}</div>
+          <div className="timer-focus-name">{selectedOutcomeName || "Pick an outcome to start"}</div>
+          {selectedOutcomeContext ? <div className="timer-focus-context">{selectedOutcomeContext}</div> : null}
+        </div>
 
-      <div className="timer-view-toggle" role="tablist" aria-label="Timer mode">
-        <button
-          className={`timer-view-chip${viewMode === "timer" ? " active" : ""}`}
-          type="button"
-          role="tab"
-          aria-selected={viewMode === "timer"}
-          aria-controls="timerViewPanel"
-          onClick={() => setViewMode("timer")}
-        >
-          Live timer
-        </button>
-        <button
-          className={`timer-view-chip${viewMode === "manual" ? " active" : ""}`}
-          type="button"
-          role="tab"
-          aria-selected={viewMode === "manual"}
-          aria-controls="timerViewPanel"
-          onClick={() => setViewMode("manual")}
-        >
-          Time logger
-        </button>
-      </div>
+        <div className="timer-view-toggle" role="tablist" aria-label="Timer mode">
+          <button
+            className={`timer-view-chip${viewMode === "timer" ? " active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={viewMode === "timer"}
+            aria-controls="timerViewPanel"
+            onClick={() => setViewMode("timer")}
+          >
+            Live timer
+          </button>
+          <button
+            className={`timer-view-chip${viewMode === "manual" ? " active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={viewMode === "manual"}
+            aria-controls="timerViewPanel"
+            onClick={() => setViewMode("manual")}
+          >
+            Time logger
+          </button>
+          <button
+            className={`timer-view-chip${viewMode === "trends" ? " active" : ""}`}
+            type="button"
+            role="tab"
+            aria-selected={viewMode === "trends"}
+            aria-controls="timerViewPanel"
+            onClick={() => setViewMode("trends")}
+          >
+            Trends
+          </button>
+        </div>
 
-      {viewMode === "timer" ? (
-        <div id="timerViewPanel" role="tabpanel">
-          <div className="timer-preset-group">
-            <div className="timer-preset-heading">Target</div>
-            <HorizontalPillStrip ariaLabel="Timer target presets">
+        {viewMode === "timer" ? (
+          <div id="timerViewPanel" role="tabpanel">
+            <div className="timer-preset-group">
+              <div className="timer-preset-heading">Target</div>
+              <HorizontalPillStrip ariaLabel="Timer target presets">
                 {DURATION_PRESETS_MINUTES.map((minutes) => (
                   <button
                     key={minutes}
@@ -318,51 +334,47 @@ export function TimerCard({
                     <span>min</span>
                   </label>
                 ) : (
-                  <button
-                    className="timer-preset-chip"
-                    type="button"
-                    onClick={openCustomTimerInput}
-                  >
+                  <button className="timer-preset-chip" type="button" onClick={openCustomTimerInput}>
                     Custom
                   </button>
                 )}
-            </HorizontalPillStrip>
+              </HorizontalPillStrip>
+            </div>
+
+            <h2 className="sr-only" id="timerTitle">Project Timer</h2>
+            <div className="timer-readout" id="timerDisplay" aria-live="polite">
+              {formatTimerTime(remainingSeconds)}
+            </div>
+
+            <div className="timer-actions">
+              <span className="button-tooltip-wrap" title={startDisabled ? startTooltip : undefined}>
+                <button
+                  className={`primary-btn${shouldHighlightStart ? " idle-sheen" : ""}`}
+                  id="startPauseBtn"
+                  type="button"
+                  onClick={onToggleTimer}
+                  disabled={startDisabled}
+                  aria-describedby={startDisabled ? "startButtonTooltip" : undefined}
+                >
+                  {startPauseLabel}
+                </button>
+              </span>
+              <button className="ghost-btn" id="resetBtn" type="button" onClick={onReset}>
+                Reset
+              </button>
+            </div>
+
+            {startDisabled ? (
+              <div className="button-tooltip-note" id="startButtonTooltip" role="note">
+                {startTooltip}
+              </div>
+            ) : null}
           </div>
-
-          <h2 className="sr-only" id="timerTitle">Project Timer</h2>
-          <div className="timer-readout" id="timerDisplay" aria-live="polite">
-            {formatTimerTime(elapsedSeconds)}
-          </div>
-
-      <div className="timer-actions">
-        <span className="button-tooltip-wrap" title={startDisabled ? startTooltip : undefined}>
-          <button
-            className={`primary-btn${shouldHighlightStart ? " idle-sheen" : ""}`}
-            id="startPauseBtn"
-            type="button"
-            onClick={onToggleTimer}
-            disabled={startDisabled}
-            aria-describedby={startDisabled ? "startButtonTooltip" : undefined}
-          >
-            {startPauseLabel}
-          </button>
-        </span>
-        <button className="ghost-btn" id="resetBtn" type="button" onClick={onReset}>
-          Reset
-        </button>
-      </div>
-
-      {startDisabled ? (
-        <div className="button-tooltip-note" id="startButtonTooltip" role="note">
-          {startTooltip}
-        </div>
-      ) : null}
-        </div>
-      ) : (
-        <div className="manual-log-panel" id="timerViewPanel" role="tabpanel">
-          <div className="timer-preset-group">
-            <div className="timer-preset-heading">Time spent</div>
-            <HorizontalPillStrip ariaLabel="Manual duration presets">
+        ) : viewMode === "manual" ? (
+          <div className="manual-log-panel" id="timerViewPanel" role="tabpanel">
+            <div className="timer-preset-group">
+              <div className="timer-preset-heading">Time spent</div>
+              <HorizontalPillStrip ariaLabel="Manual duration presets">
                 {DURATION_PRESETS_MINUTES.map((minutes) => (
                   <button
                     key={minutes}
@@ -405,47 +417,46 @@ export function TimerCard({
                     <span>min</span>
                   </label>
                 ) : (
-                  <button
-                    className="timer-preset-chip"
-                    type="button"
-                    onClick={openCustomManualInput}
-                  >
+                  <button className="timer-preset-chip" type="button" onClick={openCustomManualInput}>
                     Custom
                   </button>
                 )}
-            </HorizontalPillStrip>
+              </HorizontalPillStrip>
+            </div>
+
+            <SessionLabelField
+              value={sessionLabel}
+              onChange={setSessionLabel}
+              inputId="manualSessionLabelInput"
+            />
+
+            <div className="timer-actions manual-actions">
+              <button
+                className="primary-btn"
+                type="button"
+                onClick={() => void handleManualLogSubmit()}
+                disabled={!hasManualTarget || currentManualDurationSeconds <= 0 || isSubmittingManualLog}
+              >
+                {isSubmittingManualLog ? "Logging..." : "Save time"}
+              </button>
+            </div>
           </div>
+        ) : (
+          <ActivityHeatmap bursts={bursts} />
+        )}
 
-          <SessionLabelField
-            value={sessionLabel}
-            onChange={setSessionLabel}
-            inputId="manualSessionLabelInput"
-          />
-
-          <div className="timer-actions manual-actions">
-            <button
-              className="primary-btn"
-              type="button"
-              onClick={() => void handleManualLogSubmit()}
-              disabled={!hasManualTarget || currentManualDurationSeconds <= 0 || isSubmittingManualLog}
-            >
-              {isSubmittingManualLog ? "Logging..." : "Save time"}
-            </button>
+        {timerStatusMessage ? (
+          <div className="timer-status" role="status" aria-live="polite">
+            {timerStatusMessage}
           </div>
-        </div>
-      )}
+        ) : null}
 
-      {timerStatusMessage ? (
-        <div className="timer-status" role="status" aria-live="polite">
-          {timerStatusMessage}
-        </div>
-      ) : null}
-
-      {viewMode === "timer" ? (
-        <p className="mobile-timer-reminder">
-          Mobile background alerts may be delayed or missed. Manual log mode works better if your phone suspends timers in the background.
-        </p>
-      ) : null}
+        {viewMode === "timer" ? (
+          <p className="mobile-timer-reminder">
+            Mobile background alerts may be delayed or missed. Manual log mode works better if your phone suspends timers in the background.
+          </p>
+        ) : null}
+      </div>
     </>
   );
 }
