@@ -104,29 +104,29 @@ alter table public.app_preferences enable row level security;
 create policy "users manage own workspaces"
 on public.workspaces
 for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() is not null and auth.uid() = user_id)
+with check (auth.uid() is not null and auth.uid() = user_id);
 
 create policy "users manage own projects"
 on public.projects
 for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() is not null and auth.uid() = user_id)
+with check (auth.uid() is not null and auth.uid() = user_id);
 
 create policy "users manage own outcomes"
 on public.outcomes
 for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() is not null and auth.uid() = user_id)
+with check (auth.uid() is not null and auth.uid() = user_id);
 
 create policy "users manage own bursts"
 on public.bursts
 for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() is not null and auth.uid() = user_id)
+with check (auth.uid() is not null and auth.uid() = user_id);
 
 create policy "users manage own app_preferences"
 on public.app_preferences
 for all
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() is not null and auth.uid() = user_id)
+with check (auth.uid() is not null and auth.uid() = user_id);
