@@ -5,9 +5,9 @@ import {
   formatTimerTime,
   parseManualDurationInput
 } from "../lib/time";
+import { ActivityHeatmap } from "./ActivityHeatmap";
 import { HorizontalPillStrip } from "./HorizontalPillStrip";
 import { SessionLabelField } from "./SessionLabelField";
-import { TodayBursts } from "./TodayBursts";
 
 const MOBILE_TIMER_NOTE_KEY = "time-mobile-timer-note-dismissed-v1";
 const TIMER_VIEW_MODE_KEY = "time-timer-view-mode-v1";
@@ -16,7 +16,7 @@ const CUSTOM_MANUAL_HOURS_KEY = "time-custom-manual-hours-v1";
 const CUSTOM_MANUAL_MINUTES_KEY = "time-custom-manual-minutes-v1";
 const CUSTOM_MANUAL_OPEN_KEY = "time-custom-manual-open-v1";
 const DURATION_PRESETS_MINUTES = [10, 15, 20, 25, 30, 45];
-type TimerViewMode = "timer" | "manual" | "today";
+type TimerViewMode = "timer" | "manual" | "trends";
 
 type TimerCardProps = {
   elapsedSeconds: number;
@@ -53,7 +53,7 @@ export function TimerCard({
   const [viewMode, setViewMode] = useState<TimerViewMode>(() => {
     if (typeof window === "undefined") return "timer";
     const saved = window.localStorage.getItem(TIMER_VIEW_MODE_KEY);
-    return saved === "manual" || saved === "today" ? saved : "timer";
+    return saved === "manual" || saved === "trends" ? saved : "timer";
   });
   const [manualDurationDraft, setManualDurationDraft] = useState(() => {
     if (typeof window === "undefined") return "00:30";
@@ -283,14 +283,14 @@ export function TimerCard({
             Time logger
           </button>
           <button
-            className={`timer-view-chip${viewMode === "today" ? " active" : ""}`}
+            className={`timer-view-chip${viewMode === "trends" ? " active" : ""}`}
             type="button"
             role="tab"
-            aria-selected={viewMode === "today"}
+            aria-selected={viewMode === "trends"}
             aria-controls="timerViewPanel"
-            onClick={() => setViewMode("today")}
+            onClick={() => setViewMode("trends")}
           >
-            Today
+            Trends
           </button>
         </div>
 
@@ -441,9 +441,9 @@ export function TimerCard({
               </button>
             </div>
           </div>
-        ) : viewMode === "today" ? (
-          <TodayBursts bursts={bursts} />
-        ) : null}
+        ) : (
+          <ActivityHeatmap bursts={bursts} />
+        )}
 
         {timerStatusMessage ? (
           <div className="timer-status" role="status" aria-live="polite">

@@ -27,8 +27,6 @@ export class AppPage {
   readonly outcomeNotesInput: Locator;
   readonly timerModeLogTime: Locator;
   readonly timerModeLiveTimer: Locator;
-  readonly timerModeToday: Locator;
-  readonly trendsToggle: Locator;
   readonly manualDurationHoursInput: Locator;
   readonly manualDurationMinutesInput: Locator;
   readonly statusMessage: Locator;
@@ -49,8 +47,6 @@ export class AppPage {
     this.outcomeNotesInput = page.getByLabel("Outcome notes");
     this.timerModeLiveTimer = page.getByRole("tab", { name: /live timer/i });
     this.timerModeLogTime = page.getByRole("tab", { name: /log time|time logger/i });
-    this.timerModeToday = page.getByRole("tab", { name: /today/i });
-    this.trendsToggle = page.getByRole("button", { name: "Trends", exact: true });
     this.manualDurationHoursInput = page.getByLabel("Manual duration hours");
     this.manualDurationMinutesInput = page.getByLabel("Manual duration minutes");
     this.statusMessage = page.locator(".timer-status");
