@@ -70,11 +70,21 @@ export function TaskList({
     });
   const hasAnyTasks = Boolean(outcomes.length);
   const hasOtherTasks = queuedOutcomes.length > 0;
+  const projectBursts = project
+    ? bursts.filter((burst) => burst.projectId === project.id).sort((left, right) => left.loggedAt - right.loggedAt)
+    : [];
+  const projectTrackedSeconds = projectBursts.reduce((sum, burst) => sum + burst.durationSeconds, 0);
+  const projectBurstCount = projectBursts.length;
+  const projectStartDate = projectBursts[0]?.loggedAt || null;
+  const projectEndDate = projectBursts[projectBursts.length - 1]?.loggedAt || null;
   const [isQueueOpen, setIsQueueOpen] = useState(() => !hasOtherTasks);
   const [isSelectedBurstHistoryOpen, setIsSelectedBurstHistoryOpen] = useState(false);
   const [hasBurstHistoryFadeStart, setHasBurstHistoryFadeStart] = useState(false);
   const [hasBurstHistoryFadeEnd, setHasBurstHistoryFadeEnd] = useState(false);
+  const [hasQueueFadeStart, setHasQueueFadeStart] = useState(false);
+  const [hasQueueFadeEnd, setHasQueueFadeEnd] = useState(false);
   const burstHistoryRef = useRef<HTMLDivElement | null>(null);
+  const queueBodyRef = useRef<HTMLDivElement | null>(null);
 
   useLayoutEffect(() => {
     setIsQueueOpen(!hasOtherTasks);
@@ -85,8 +95,10 @@ export function TaskList({
   }, [activeOutcomeId]);
 
   useEffect(() => {
-    onQueueExpandedChange(isQueueOpen && (queuedOutcomes.length > 0 || selectedOutcome !== null));
-  }, [isQueueOpen, onQueueExpandedChange, queuedOutcomes.length, selectedOutcome]);
+    onQueueExpandedChange(
+      isQueueOpen && (queuedOutcomes.length > 0 || selectedOutcome !== null || isComposerOpen || !hasAnyTasks)
+    );
+  }, [hasAnyTasks, isComposerOpen, isQueueOpen, onQueueExpandedChange, queuedOutcomes.length, selectedOutcome]);
 
   useEffect(() => {
     onSelectedBurstHistoryOpenChange(isSelectedBurstHistoryOpen);
@@ -116,6 +128,30 @@ export function TaskList({
     };
   }, [isSelectedBurstHistoryOpen, activeOutcomeId, bursts]);
 
+  useEffect(() => {
+    const node = queueBodyRef.current;
+    if (!node || !isQueueOpen) {
+      setHasQueueFadeStart(false);
+      setHasQueueFadeEnd(false);
+      return;
+    }
+
+    const updateQueueFade = () => {
+      const maxScrollTop = node.scrollHeight - node.clientHeight;
+      setHasQueueFadeStart(node.scrollTop > 4);
+      setHasQueueFadeEnd(maxScrollTop - node.scrollTop > 4);
+    };
+
+    updateQueueFade();
+    node.addEventListener("scroll", updateQueueFade, { passive: true });
+    window.addEventListener("resize", updateQueueFade);
+
+    return () => {
+      node.removeEventListener("scroll", updateQueueFade);
+      window.removeEventListener("resize", updateQueueFade);
+    };
+  }, [isQueueOpen, queuedOutcomes.length, isComposerOpen]);
+
   function getOutcomeTrackedSeconds(outcomeId: string): number {
     return getOutcomeBursts(outcomeId)
       .reduce((sum, burst) => sum + burst.durationSeconds, 0);
@@ -129,6 +165,15 @@ export function TaskList({
       day: "numeric",
       hour: "numeric",
       minute: "2-digit"
+    });
+  }
+
+  function formatProjectDate(timestamp: number | null): string {
+    if (!timestamp) return "No data yet";
+    return new Date(timestamp).toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
     });
   }
 
@@ -249,51 +294,50 @@ export function TaskList({
   }
 
   return (
-    <>
-      {selectedOutcome ? (
-        <div className="selected-task-panel">
-          <div className="selected-task-kicker">Selected outcome</div>
-          <div className="tasks-list" id="tasksList">
-            {renderOutcome(selectedOutcome, true)}
+    <div className="task-list-shell">
+      <div className="task-list-content">
+        {selectedOutcome ? (
+          <div className="selected-task-panel">
+            <div className="selected-task-kicker">Selected outcome</div>
+            <div className="tasks-list" id="tasksList">
+              {renderOutcome(selectedOutcome, true)}
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
-      {queuedOutcomes.length ? (
-        <div className="task-queue">
-          <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
-            <span className="task-queue-label">Other outcomes</span>
-            <span className="task-queue-count">{queuedOutcomes.length}</span>
-            <span className="task-queue-caret">{isQueueOpen ? "Hide" : "Show"}</span>
-          </button>
+        {queuedOutcomes.length ? (
+          <div className="task-queue">
+            <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
+              <span className="task-queue-label">Other outcomes</span>
+              <span className="task-queue-count">{queuedOutcomes.length}</span>
+              <span className="task-queue-caret">{isQueueOpen ? "Hide" : "Show"}</span>
+            </button>
 
-          {isQueueOpen ? (
-            <>
-              <TaskComposer
-                isOpen={isComposerOpen}
-                editingOutcome={null}
-                outcomeTypeOptions={outcomeTypeOptions}
-                onOpen={onOpenComposer}
-                onCancel={onCancelComposer}
-                onSave={onSaveOutcome}
-                highlightTrigger={false}
-              />
+            {isQueueOpen ? (
+              <div
+                ref={queueBodyRef}
+                className={`task-queue-body${hasQueueFadeStart ? " fade-start" : ""}${hasQueueFadeEnd ? " fade-end" : ""}`}
+              >
+                <TaskComposer
+                  isOpen={isComposerOpen}
+                  editingOutcome={null}
+                  outcomeTypeOptions={outcomeTypeOptions}
+                  onOpen={onOpenComposer}
+                  onCancel={onCancelComposer}
+                  onSave={onSaveOutcome}
+                  highlightTrigger={false}
+                />
 
-              <div className="tasks-list task-queue-list">
-                {queuedOutcomes.map((outcome) => renderOutcome(outcome, false))}
+                <div className="tasks-list task-queue-list">
+                  {queuedOutcomes.map((outcome) => renderOutcome(outcome, false))}
+                </div>
               </div>
-            </>
-          ) : null}
-        </div>
-      ) : !editingOutcome ? (
-        <div className="task-queue">
-          <button className="task-queue-toggle" type="button" onClick={() => setIsQueueOpen((open) => !open)}>
-            <span className="task-queue-label">{hasAnyTasks ? "Other outcomes" : "Outcomes"}</span>
-            <span className="task-queue-count">0</span>
-            <span className="task-queue-caret">{isQueueOpen ? "Hide" : "Show"}</span>
-          </button>
+            ) : null}
+          </div>
+        ) : null}
 
-          {isQueueOpen ? (
+        {!queuedOutcomes.length && !editingOutcome ? (
+          <div className="task-composer-standalone">
             <TaskComposer
               isOpen={isComposerOpen}
               editingOutcome={null}
@@ -303,21 +347,25 @@ export function TaskList({
               onSave={onSaveOutcome}
               highlightTrigger={!hasAnyTasks}
             />
-          ) : null}
+          </div>
+        ) : null}
+
+        {outcomes.length && !selectedOutcome ? (
+          <div className="task-empty-state">Pick an outcome to lock in your focus session.</div>
+        ) : null}
+
+        {!selectedOutcome && !queuedOutcomes.length && hasAnyTasks ? (
+          <div className="tasks-list" id="tasksList"></div>
+        ) : null}
+      </div>
+
+      {project ? (
+        <div className="project-stats-footer" aria-label="Project stats">
+          {projectBurstCount
+            ? `${formatProjectDate(projectStartDate)} to ${formatProjectDate(projectEndDate)} • ${formatManualDuration(projectTrackedSeconds)} tracked • ${projectBurstCount} burst${projectBurstCount === 1 ? "" : "s"}`
+            : "No tracked work yet for this project."}
         </div>
       ) : null}
-
-      {!outcomes.length ? (
-        <div className="task-empty-state">Add an outcome, then pick it to start focusing.</div>
-      ) : null}
-
-      {outcomes.length && !selectedOutcome ? (
-        <div className="task-empty-state">Pick an outcome to lock in your focus session.</div>
-      ) : null}
-
-      {!selectedOutcome && !queuedOutcomes.length ? (
-        <div className="tasks-list" id="tasksList"></div>
-      ) : null}
-    </>
+    </div>
   );
 }

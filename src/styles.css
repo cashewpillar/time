@@ -702,7 +702,24 @@ button {
 }
 
 .tasks-section-top {
+  display: flex;
+  flex-direction: column;
   padding: 10px 10px 12px;
+}
+
+.task-list-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.task-list-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .project-bar {
@@ -1584,8 +1601,54 @@ button {
 }
 
 .task-queue {
-  display: grid;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
   gap: 8px;
+}
+
+.task-composer-standalone {
+  margin-top: 8px;
+}
+
+.task-queue-body {
+  --queue-fade-top: 0px;
+  --queue-fade-bottom: 0px;
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  gap: 10px;
+  padding: 2px 2px 8px 0;
+  scrollbar-width: none;
+  overflow-x: hidden;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--queue-fade-top),
+    #000 calc(100% - var(--queue-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--queue-fade-top),
+    #000 calc(100% - var(--queue-fade-bottom)),
+    transparent 100%
+  );
+}
+
+.task-queue-body::-webkit-scrollbar {
+  display: none;
+}
+
+.task-queue-body.fade-start {
+  --queue-fade-top: 18px;
+}
+
+.task-queue-body.fade-end {
+  --queue-fade-bottom: 18px;
 }
 
 .task-queue-toggle {
@@ -1596,13 +1659,14 @@ button {
   width: 100%;
   padding: 8px 10px;
   border-radius: 14px;
-  background: var(--surface);
+  background: var(--panel-strong);
   color: var(--white);
   text-align: left;
 }
 
 .task-queue-list {
   margin-bottom: 0;
+  min-height: 0;
 }
 
 .task-queue-count,
@@ -1962,6 +2026,17 @@ button {
   font-weight: 700;
 }
 
+.project-stats-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  /* border-top: 1px solid var(--overlay-strong); */
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.45;
+  text-align: center;
+}
+
 .task-input:focus-visible,
 .timer-config input:focus-visible {
   outline: 2px solid rgba(247, 249, 255, 0.7);
@@ -2013,6 +2088,7 @@ button {
   .timer-card {
     align-self: start;
     width: 100%;
+    min-height: 70vh;
     padding: 11px 13px 14px;
     position: sticky;
     top: 14px;
@@ -2052,8 +2128,8 @@ button {
 
 @media (hover: none), (pointer: coarse), (max-width: 679px) {
   .app-shell {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 12px;
+    padding-right: 12px;
   }
 
   .main {
@@ -2063,7 +2139,7 @@ button {
 
   .timer-card,
   .tasks-section {
-    width: min(100%, 520px);
+    width: min(100%, 540px);
     margin-inline: auto;
   }
 

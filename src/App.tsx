@@ -349,7 +349,7 @@ function App() {
         <section
           className={`tasks-section tasks-section-top${shouldExpandTasksCard ? " expanded" : ""}${state.isProjectMenuOpen ? " menu-open" : ""}`}
           aria-labelledby="tasksHeading"
-          style={!shouldExpandTasksCard && isDesktopLayout && collapsedTasksHeight ? { height: `${collapsedTasksHeight}px` } : undefined}
+          style={isDesktopLayout && collapsedTasksHeight ? { height: `${collapsedTasksHeight}px` } : undefined}
         >
           <div ref={projectMenuRef}>
             <ProjectTabs
