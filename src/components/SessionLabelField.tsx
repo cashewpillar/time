@@ -4,7 +4,7 @@ import { HorizontalPillStrip } from "./HorizontalPillStrip";
 export const SESSION_LABEL_PRESETS = [
   "brute-force debugging",
   "stuck on repro",
-  "tired",
+  "frustrated",
   "energized"
 ] as const;
 
