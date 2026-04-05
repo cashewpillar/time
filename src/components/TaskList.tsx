@@ -6,6 +6,7 @@ import type { Burst, Outcome, OutcomeDraft, Project } from "../types/app";
 
 type TaskListProps = {
   project: Project | null;
+  projectOptions: Project[];
   outcomes: Outcome[];
   bursts: Burst[];
   editingOutcome: Outcome | null;
@@ -27,6 +28,7 @@ type TaskListProps = {
 
 export function TaskList({
   project,
+  projectOptions,
   outcomes,
   bursts,
   editingOutcome,
@@ -223,6 +225,8 @@ export function TaskList({
                 isOpen
                 editingOutcome={editingOutcome}
                 outcomeTypeOptions={outcomeTypeOptions}
+                projectOptions={projectOptions}
+                currentProjectId={project?.id || null}
                 onCancel={onCancelEdit}
                 onSave={onSaveOutcome}
                 hideTrigger
@@ -322,6 +326,8 @@ export function TaskList({
                   isOpen={isComposerOpen}
                   editingOutcome={null}
                   outcomeTypeOptions={outcomeTypeOptions}
+                  projectOptions={projectOptions}
+                  currentProjectId={project?.id || null}
                   onOpen={onOpenComposer}
                   onCancel={onCancelComposer}
                   onSave={onSaveOutcome}
@@ -342,6 +348,8 @@ export function TaskList({
               isOpen={isComposerOpen}
               editingOutcome={null}
               outcomeTypeOptions={outcomeTypeOptions}
+              projectOptions={projectOptions}
+              currentProjectId={project?.id || null}
               onOpen={onOpenComposer}
               onCancel={onCancelComposer}
               onSave={onSaveOutcome}

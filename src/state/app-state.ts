@@ -870,17 +870,39 @@ export function appReducer(state: AppState, action: AppAction): AppState {
       const nextCustomTypes = customType && !state.customOutcomeTypes.includes(customType)
         ? [...state.customOutcomeTypes, customType].sort()
         : state.customOutcomeTypes;
+      const editingOutcome = state.editingOutcomeId
+        ? state.outcomes.find((outcome) => outcome.id === state.editingOutcomeId) || null
+        : null;
+      const targetProject = state.projects.find((entry) => entry.id === (action.draft.projectId || project.id) && entry.workspaceId === workspace.id) || project;
       const outcomeId = state.editingOutcomeId || createEntityId("outcome", action.now);
       const nextOutcomes = state.editingOutcomeId
         ? state.outcomes.map((outcome) => outcome.id === state.editingOutcomeId
-          ? { ...outcome, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible }
+          ? {
+              ...outcome,
+              projectId: targetProject.id,
+              title: action.draft.title,
+              type: action.draft.type,
+              notes: action.draft.notes,
+              agentEligible: action.draft.agentEligible
+            }
           : outcome)
-        : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: project.id, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, done: false }];
+        : [...state.outcomes, { id: outcomeId, workspaceId: workspace.id, projectId: targetProject.id, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible, done: false }];
       const nextBursts = state.bursts.map((burst) => burst.outcomeId === state.editingOutcomeId
-        ? { ...burst, title: action.draft.title, type: action.draft.type, notes: action.draft.notes, agentEligible: action.draft.agentEligible }
+        ? {
+            ...burst,
+            projectId: targetProject.id,
+            title: action.draft.title,
+            type: action.draft.type,
+            notes: action.draft.notes,
+            agentEligible: action.draft.agentEligible
+          }
         : burst);
+      const nextWorkspaces = editingOutcome && editingOutcome.projectId !== targetProject.id
+        ? setActiveProjectOnWorkspace(state, workspace.id, targetProject.id)
+        : state.workspaces;
       return normalizeState({
         ...state,
+        workspaces: nextWorkspaces,
         outcomes: nextOutcomes,
         bursts: nextBursts,
         activeOutcomeId: outcomeId,

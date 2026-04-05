@@ -53,6 +53,10 @@ function App() {
   const selectedOutcome = useMemo(() => getSelectedOutcome(state), [state]);
   const editingOutcome = useMemo(() => getEditingOutcome(state), [state]);
   const visibleProjects = useMemo(() => getVisibleProjects(activeWorkspace, state), [activeWorkspace, state]);
+  const workspaceProjects = useMemo(
+    () => activeWorkspace ? state.projects.filter((project) => project.workspaceId === activeWorkspace.id) : [],
+    [activeWorkspace, state.projects]
+  );
   const projectOutcomes = useMemo(() => activeProject ? getOutcomesForProjectId(state, activeProject.id) : [], [activeProject, state]);
   const outcomeTypeOptions = useMemo(() => getOutcomeTypeOptions(state.customOutcomeTypes), [state.customOutcomeTypes]);
   const isOutcomeComposerOpen = state.isOutcomeFormOpen && !editingOutcome;
@@ -236,7 +240,7 @@ function App() {
     setCompletionSessionLabel("");
   }
 
-  function handleSaveOutcome(draft: { title: string; type: string; notes: string; agentEligible: boolean }, customType: string) {
+  function handleSaveOutcome(draft: { title: string; type: string; notes: string; agentEligible: boolean; projectId?: string }, customType: string) {
     if (!activeProject) {
       dispatch({ type: "set-status", status: "Add an outcome name first." });
       return;
@@ -249,6 +253,11 @@ function App() {
 
     if (draft.type === "__custom__" && !customType.trim()) {
       dispatch({ type: "set-status", status: "Add a custom outcome type first." });
+      return;
+    }
+
+    if (draft.projectId && !workspaceProjects.some((project) => project.id === draft.projectId)) {
+      dispatch({ type: "set-status", status: "Pick a valid project first." });
       return;
     }
 
@@ -368,6 +377,7 @@ function App() {
           <TaskList
             key={activeProject?.id || "no-project"}
             project={activeProject}
+            projectOptions={workspaceProjects}
             outcomes={projectOutcomes}
             bursts={state.bursts}
             editingOutcome={editingOutcome}

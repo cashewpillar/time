@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { Outcome, OutcomeDraft } from "../types/app";
+import type { Outcome, OutcomeDraft, Project } from "../types/app";
 
 type TaskComposerProps = {
   isOpen: boolean;
   editingOutcome: Outcome | null;
   outcomeTypeOptions: string[];
+  projectOptions: Project[];
+  currentProjectId: string | null;
   onOpen?: () => void;
   onCancel: () => void;
   onSave: (draft: OutcomeDraft, customType: string) => void;
@@ -20,6 +22,7 @@ type FormState = {
   customType: string;
   notes: string;
   agentEligible: boolean;
+  projectId: string;
 };
 
 const emptyForm: FormState = {
@@ -27,13 +30,16 @@ const emptyForm: FormState = {
   type: "",
   customType: "",
   notes: "",
-  agentEligible: false
+  agentEligible: false,
+  projectId: ""
 };
 
 export function TaskComposer({
   isOpen,
   editingOutcome,
   outcomeTypeOptions,
+  projectOptions,
+  currentProjectId,
   onOpen,
   onCancel,
   onSave,
@@ -57,16 +63,17 @@ export function TaskComposer({
         type: outcomeTypeOptions.includes(normalizedType) ? normalizedType : "__custom__",
         customType: outcomeTypeOptions.includes(normalizedType) ? "" : editingOutcome.type || "",
         notes: editingOutcome.notes || "",
-        agentEligible: Boolean(editingOutcome.agentEligible)
+        agentEligible: Boolean(editingOutcome.agentEligible),
+        projectId: editingOutcome.projectId
       });
     } else {
-      setForm(emptyForm);
+      setForm({ ...emptyForm, projectId: currentProjectId || "" });
     }
 
     window.setTimeout(() => {
       outcomeInputRef.current?.focus();
     }, 0);
-  }, [editingOutcome, isOpen, outcomeTypeOptions]);
+  }, [currentProjectId, editingOutcome, isOpen, outcomeTypeOptions]);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -88,7 +95,8 @@ export function TaskComposer({
         title: text,
         type,
         notes: form.notes.trim(),
-        agentEligible: form.agentEligible
+        agentEligible: form.agentEligible,
+        projectId: form.projectId || currentProjectId || undefined
       },
       customType
     );
@@ -143,6 +151,24 @@ export function TaskComposer({
                 <option value="__custom__">Add more...</option>
               </select>
             </div>
+
+            {editingOutcome && projectOptions.length > 1 ? (
+              <div className="task-input-row">
+                <select
+                  className="task-input task-type-select"
+                  id="taskProjectInput"
+                  aria-label="Project"
+                  value={form.projectId}
+                  onChange={(event) => setForm((current) => ({ ...current, projectId: event.target.value }))}
+                >
+                  {projectOptions.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
             <div className={`task-input-row task-type-custom${form.type === "__custom__" ? " open" : ""}`} id="taskTypeCustomRow">
               <input

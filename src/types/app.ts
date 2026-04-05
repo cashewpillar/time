@@ -61,6 +61,7 @@ export type OutcomeDraft = {
   type: string;
   notes: string;
   agentEligible: boolean;
+  projectId?: string;
 };
 
 export type LegacyPersistedTask = {
