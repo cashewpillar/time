@@ -68,6 +68,8 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
   const lastUploadedFingerprintRef = useRef<string | null>(null);
   const lastLoadedUserIdRef = useRef<string | null>(null);
   const lastSyncedStateRef = useRef<AppState | null>(null);
+  const initialRemoteLoadResolvedRef = useRef(false);
+  const hasRemoteConflictRef = useRef(false);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeStateForStorage(state)));
@@ -87,6 +89,9 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
   }, [userId]);
 
   useEffect(() => {
+    initialRemoteLoadResolvedRef.current = false;
+    hasRemoteConflictRef.current = false;
+
     if (!isSupabaseSyncEnabled() || !userId || lastLoadedUserIdRef.current === userId) return;
 
     lastLoadedUserIdRef.current = userId;
@@ -116,19 +121,27 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
           });
           lastUploadedFingerprintRef.current = buildSyncFingerprint(hydratedState);
           lastSyncedStateRef.current = hydratedState;
+          hasRemoteConflictRef.current = false;
+        } else if (remoteState) {
+          hasRemoteConflictRef.current = true;
         }
+
+        initialRemoteLoadResolvedRef.current = true;
 
         setSyncInfo((current) => ({
           ...current,
           enabled: true,
           status: "connected",
-          lastError: null,
+          lastError: hasRemoteConflictRef.current
+            ? "Remote data exists and local data is not empty. Download from Supabase or use Emergency Full Sync before syncing."
+            : null,
           pendingUploadAt: null,
           pendingUploadSeconds: null
         }));
       } catch (error) {
         console.error("Unable to load state from Supabase.", error);
         if (cancelled) return;
+        initialRemoteLoadResolvedRef.current = true;
         setSyncInfo((current) => ({
           ...current,
           enabled: true,
@@ -149,6 +162,8 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
 
   useEffect(() => {
     if (!isSupabaseSyncEnabled() || !userId) return;
+    if (!initialRemoteLoadResolvedRef.current) return;
+    if (hasRemoteConflictRef.current) return;
     if (lastUploadedFingerprintRef.current === autoSyncFingerprint) return;
 
     const pendingUploadAt = Date.now() + 10000;
@@ -220,6 +235,15 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
 
   async function syncNow(): Promise<void> {
     if (!isSupabaseSyncEnabled() || !userId) return;
+    if (hasRemoteConflictRef.current) {
+      setSyncInfo((current) => ({
+        ...current,
+        enabled: true,
+        status: "error",
+        lastError: "Download from Supabase or use Emergency Full Sync before syncing local changes."
+      }));
+      return;
+    }
 
     setSyncInfo((current) => ({
       ...current,
@@ -333,6 +357,8 @@ export function usePersistentAppState({ userId }: Options): PersistentAppStateRe
         outcomes: remoteState.outcomes ?? [],
         bursts: remoteState.bursts ?? []
       } as AppState;
+      hasRemoteConflictRef.current = false;
+      initialRemoteLoadResolvedRef.current = true;
       lastUploadedFingerprintRef.current = buildSyncFingerprint(nextState);
       lastSyncedStateRef.current = nextState;
       setSyncInfo((current) => ({
